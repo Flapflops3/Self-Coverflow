@@ -1,0 +1,27 @@
+name: macOS build and smoke test
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Music scripting interface
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          sdef = next(pathlib.Path('/System/Applications/Music.app/Contents/Resources').glob('*.sdef'))
+          root = ET.parse(sdef)
+          print('Track properties:', [p.get('name') for c in root.iter('class') if c.get('name')=='track' for p in c.findall('property')])
+          print('Playback:', [c.get('name') for c in root.iter('command') if 'play' in c.get('name','')])
+          PY
+      - name: Build and exercise both editions
+        run: bash mac/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: dist/Cover-Shelf-macOS-*.zip
+          if-no-files-found: error
+
