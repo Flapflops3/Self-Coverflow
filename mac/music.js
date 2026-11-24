@@ -38,8 +38,9 @@ function run(args) {
             title:t.name(), album:t.album(), artist:t.artist(), trackID:String(t.databaseID())});
     }
     if (command === 'play') {
-        const t=music.libraryPlaylists[0].tracks.byId(Number(args[1]));
-        if (!t.exists()) throw Error('The selected track is no longer in the library.');
+        const matches=music.libraryPlaylists[0].tracks.whose({databaseID:{_equals:Number(args[1])}})();
+        const t=matches[0];
+        if (!t) throw Error('The selected track is no longer in the library.');
         const title=t.name(); // resolve the target before pausing
         if (!title) throw Error('The selected track has no title.');
         if (music.playerState()==='playing') music.pause();
