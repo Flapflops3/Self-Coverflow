@@ -8,7 +8,7 @@ for cpu in arm64 x86_64; do
   xcrun swiftc -swift-version 5 -O -target "$cpu-apple-macos13.0" mac/*.swift -o "$out/shelf-$cpu"
 done
 lipo -create "$out/shelf-arm64" "$out/shelf-x86_64" -output "$out/CoverShelf"
-lipo -verify_arch arm64 x86_64 "$out/CoverShelf"
+lipo "$out/CoverShelf" -verify_arch arm64 x86_64
 osacompile -o "$out/artwork.scpt" mac/artwork.applescript
 osacompile -l JavaScript -o "$out/music.scpt" mac/music.js
 for lang in en zh; do

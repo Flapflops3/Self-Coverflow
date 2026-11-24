@@ -43,7 +43,7 @@ function run(args) {
         const title=t.name(); // resolve the target before pausing
         if (!title) throw Error('The selected track has no title.');
         if (music.playerState()==='playing') music.pause();
-        t.play();
+        music.play(t);
     } else if (command==='resume') music.play();
     else if (command==='toggle') music.playpause();
     else if (command==='lyrics') {
