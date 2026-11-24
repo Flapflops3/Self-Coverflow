@@ -1,0 +1,23 @@
+const ui = Object.freeze({
+  "starting": "正在开始播放…",
+  "playTimeout": "Apple Music 尚未确认开始播放。",
+  "playing": "正在播放",
+  "paused": "已暂停",
+  "pause": "暂停 Apple Music",
+  "play": "播放",
+  "resume": "继续播放 Apple Music",
+  "favorites": "收藏专辑 ",
+  "all": "全部专辑 ",
+  "showAll": "显示全部专辑",
+  "showFavorites": "只看收藏专辑",
+  "undock": "切换为独立窗口",
+  "dock": "贴在桌面",
+  "noFavorites": "还没有收藏专辑",
+  "empty": "资料库里还没有专辑",
+  "unknown": "未知艺人",
+  "browseAll": "点左上角可浏览全部专辑",
+  "add": "在 Apple Music 中添加专辑后会自动更新",
+  "libraryError": "暂时无法读取资料库",
+  "unpin": "取消置顶",
+  "pin": "置顶显示"
+});

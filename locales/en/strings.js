@@ -1,0 +1,23 @@
+const ui = Object.freeze({
+  "starting": "Starting playback…",
+  "playTimeout": "Apple Music has not confirmed playback.",
+  "playing": "Now playing",
+  "paused": "Paused",
+  "pause": "Pause Apple Music",
+  "play": "Play",
+  "resume": "Resume Apple Music",
+  "favorites": "Favorites ",
+  "all": "All Albums ",
+  "showAll": "Show all albums",
+  "showFavorites": "Show favorites",
+  "undock": "Detach from desktop",
+  "dock": "Attach to desktop",
+  "noFavorites": "No favorite albums yet",
+  "empty": "Your library is empty",
+  "unknown": "Unknown artist",
+  "browseAll": "Select Favorites above to browse all albums",
+  "add": "Add an album in Apple Music to see it here",
+  "libraryError": "Library unavailable",
+  "unpin": "Unpin window",
+  "pin": "Pin on top"
+});
