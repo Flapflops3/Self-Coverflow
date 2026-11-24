@@ -9,12 +9,12 @@ res = app / "Contents/Resources"
 ui = res / "ui"
 info = {
     "CFBundleExecutable": "CoverShelf", "CFBundleName": name, "CFBundleDisplayName": name,
-    "CFBundleIdentifier": "io.github.flapflops3.covershelf." + lang,
+    "CFBundleIdentifier": "io.github.flapflops3.selfcoverflow." + lang,
     "CFBundlePackageType": "APPL", "CFBundleVersion": "1", "CFBundleShortVersionString": "1.0.0",
-    "LSMinimumSystemVersion": "13.0", "LSUIElement": True, "ShelfLanguage": lang,
+    "LSMinimumSystemVersion": "13.0", "LSUIElement": True, "ShelfLanguage": lang, "CFBundleIconFile": "Icon.icns",
     "CFBundleDevelopmentRegion": "en" if lang == "en" else "zh_CN",
     "NSHighResolutionCapable": True,
-    "NSAppleEventsUsageDescription": "Cover Shelf reads your albums and controls playback in Music." if lang == "en" else "唱片架需要读取本机音乐资料库并控制播放。",
+    "NSAppleEventsUsageDescription": "Self Coverflow reads your albums and controls playback in Music." if lang == "en" else "唱片架需要读取本机音乐资料库并控制播放。",
 }
 (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
 html = (ui / "index.html").read_text()

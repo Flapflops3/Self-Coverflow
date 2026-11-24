@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://art.local data:; connect-src https://shelf.local/disc-drive.wav; object-src 'none'; base-uri 'none'">
-<title>Cover Shelf</title><link rel="stylesheet" href="shelf.css"><script defer src="strings.js"></script><script defer src="drive-sound.js"></script><script defer src="shelf.js"></script></head>
+<title>Self Coverflow</title><link rel="stylesheet" href="shelf.css"><script defer src="strings.js"></script><script defer src="drive-sound.js"></script><script defer src="shelf.js"></script></head>
 <body><main>
-<header id="grip" title="Drag to move Cover Shelf"><button id="filter" title="Switch between favorites and all albums">Favorites <span aria-hidden="true">⌄</span></button><div id="lookup">
+<header id="grip" title="Drag to move Self Coverflow"><button id="filter" title="Switch between favorites and all albums">Favorites <span aria-hidden="true">⌄</span></button><div id="lookup">
 <form id="searchForm" role="search" autocomplete="off">
 <button type="button" id="searchToggle" aria-label="Search albums" title="Search albums" aria-expanded="false" aria-controls="albumQuery"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.1"/><path d="m12.3 12.3 3.9 3.9"/></svg></button>
 <input id="albumQuery" role="combobox" aria-label="Search albums" placeholder="Search albums" aria-autocomplete="list" aria-expanded="false" aria-controls="albumMatches" spellcheck="false" disabled>
@@ -15,5 +15,5 @@
 </section>
 <div class="bar"><button id="prev" aria-label="Previous album" title="Previous album"><i></i></button><button id="transport" aria-label="Play" title="Play"><i></i></button><button id="next" aria-label="Next album" title="Next album"><i></i></button></div>
 <output id="status" aria-live="polite"></output>
-<nav id="options" hidden><div class="sizes" role="group" aria-label="Window width"><button data-size="classic" aria-pressed="true">Classic</button><button data-size="half" aria-pressed="false">Half</button><button data-size="wide" aria-pressed="false">Full</button></div><button id="switch">Show all albums</button><button id="lyrics">Lyrics</button><button type="button" id="driveSoundSwitch" role="switch" aria-checked="true">Simulation Effects<span aria-hidden="true"></span></button><button id="refresh">Refresh library</button><button id="dock">Attach to desktop</button><button id="close">Close Cover Shelf</button></nav>
+<nav id="options" hidden><div class="sizes" role="group" aria-label="Window width"><button data-size="classic" aria-pressed="true">Classic</button><button data-size="half" aria-pressed="false">Half</button><button data-size="wide" aria-pressed="false">Full</button></div><button id="switch">Show all albums</button><button id="lyrics">Lyrics</button><button type="button" id="driveSoundSwitch" role="switch" aria-checked="true">Simulation Effects<span aria-hidden="true"></span></button><button id="refresh">Refresh library</button><button id="dock">Attach to desktop</button><button id="close">Close Self Coverflow</button></nav>
 </main></body></html>

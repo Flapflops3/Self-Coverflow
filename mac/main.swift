@@ -31,7 +31,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         web=WKWebView(frame:.zero,configuration:config)
         web.navigationDelegate=self
         window=ShelfWindow(contentRect:NSRect(x:0,y:0,width:472,height:306),styleMask:[.borderless],backing:.buffered,defer:false)
-        window.isReleasedWhenClosed=false;window.title=en ? "Cover Shelf" : "唱片架"
+        window.isReleasedWhenClosed=false;window.title="Self Coverflow"
         window.isOpaque=false;window.backgroundColor = .clear;window.hasShadow=true
         window.contentView=web;web.wantsLayer=true;web.layer?.cornerRadius=17;web.layer?.masksToBounds=true
         window.delegate=self
@@ -201,7 +201,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     func windowWillClose(_ note:Notification){NSApp.terminate(nil)}
     func smokeTest(){
         resources.fixture=true;resources.allowed=["1","2","3"]
-        let albums=(1...3).map{["id":String($0),"title":"Album "+String($0),"artist":"Cover Shelf","cover":String($0),"favorite":true] as [String:Any]}
+        let albums=(1...3).map{["id":String($0),"title":"Album "+String($0),"artist":"Self Coverflow","cover":String($0),"favorite":true] as [String:Any]}
         post(["type":"library","albums":albums])
         DispatchQueue.main.asyncAfter(deadline:.now()+1.5){
             self.web.evaluateJavaScript("(()=>{document.querySelector('[data-size=half]').click();return {n:all.length,lang:document.documentElement.lang,width:innerWidth,cover:!!document.querySelector('.cover img')?.naturalWidth}})()"){value,error in
