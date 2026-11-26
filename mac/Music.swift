@@ -13,7 +13,7 @@ enum Music {
         task.standardError = pipe
         try task.run()
         let timeout = DispatchWorkItem { if task.isRunning { task.terminate() } }
-        DispatchQueue.global().asyncAfter(deadline: .now() + (args.first == "library" ? 100 : 18), execute: timeout)
+        DispatchQueue.global().asyncAfter(deadline: .now() + (["library","repeatAlbum"].contains(args.first ?? "") ? 100 : 18), execute: timeout)
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
         timeout.cancel()

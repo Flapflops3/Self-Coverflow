@@ -10,7 +10,7 @@ ui = res / "ui"
 info = {
     "CFBundleExecutable": "CoverShelf", "CFBundleName": name, "CFBundleDisplayName": name,
     "CFBundleIdentifier": "io.github.flapflops3.selfcoverflow." + lang,
-    "CFBundlePackageType": "APPL", "CFBundleVersion": "1", "CFBundleShortVersionString": "1.0.0",
+    "CFBundlePackageType": "APPL", "CFBundleVersion": "2", "CFBundleShortVersionString": "1.0.0",
     "LSMinimumSystemVersion": "13.0", "LSUIElement": True, "ShelfLanguage": lang, "CFBundleIconFile": "Icon.icns",
     "CFBundleDevelopmentRegion": "en" if lang == "en" else "zh_CN",
     "NSHighResolutionCapable": True,

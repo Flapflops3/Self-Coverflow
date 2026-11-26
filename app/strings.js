@@ -1,4 +1,9 @@
 const ui = Object.freeze({
+  "previousTrack": "上一首",
+  "nextTrack": "下一首",
+  "repeatAlbum": "专辑循环 · 切换为单曲循环",
+  "repeatOne": "单曲循环 · 切换为专辑循环",
+  "repeatOff": "开启专辑循环",
   "starting": "正在开始播放…",
   "playTimeout": "Apple Music 尚未确认开始播放。",
   "playing": "正在播放",

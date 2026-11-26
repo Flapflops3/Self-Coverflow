@@ -18,7 +18,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     var ready=false,reading=false,polling=false,attachedLyrics=true
     var pinned=false,docked=false,mode="classic",revision=0
     var lastTrack="",lyricsTrack="",lastState=Data(),lastRead=Date.distantPast
-    var albumByTrack=[String:String]()
+    var albumByTrack=[String:String](), tracksByAlbum=[String:[String]]()
     var origin=NSPoint.zero,anchor=NSPoint.zero
     var idle:DispatchWorkItem?
     var timer:Timer?
@@ -78,14 +78,16 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             do {
                 let data=try Music.script(["library"])
                 guard let input=try JSONSerialization.jsonObject(with:data) as? [[String:Any]] else{throw URLError(.cannotParseResponse)}
-                var map=[String:String](),albums=[[String:Any]]()
+                var map=[String:String](),tracksByAlbum=[String:[String]](),albums=[[String:Any]]()
                 for var row in input {
                     guard let id=row["id"] as? String else{continue}
-                    for track in row.removeValue(forKey:"trackIDs") as? [String] ?? [] {map[track]=id}
+                    let tracks=row.removeValue(forKey:"trackIDs") as? [String] ?? []
+                    tracksByAlbum[id]=tracks
+                    for track in tracks {map[track]=id}
                     row.removeValue(forKey:"order");row["cover"]=id;albums.append(row)
                 }
                 DispatchQueue.main.async {
-                    self.reading=false;self.albumByTrack=map;self.resources.allowed=Set(map.values)
+                    self.reading=false;self.albumByTrack=map;self.tracksByAlbum=tracksByAlbum;self.resources.allowed=Set(map.values)
                     self.post(["type":"library","albums":albums]);self.lastState=Data();self.poll()
                 }
             } catch {DispatchQueue.main.async{
@@ -105,6 +107,8 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
                 if wantsLyrics,!id.isEmpty, let raw=try? Music.script(["position"]) {position=Double(String(decoding:raw,as:UTF8.self).trimmingCharacters(in:.whitespacesAndNewlines))}
                 DispatchQueue.main.async {
                     self.polling=false;self.lastTrack=id;state["albumId"]=self.albumByTrack[id]
+                    let tracks=self.tracksByAlbum[self.albumByTrack[id] ?? ""] ?? []
+                    state["canRepeat"] = !tracks.isEmpty;state["canStep"] = tracks.count>1
                     let serial=(try? JSONSerialization.data(withJSONObject:state,options:.sortedKeys)) ?? Data()
                     if serial != self.lastState {self.lastState=serial;self.post(["type":"media","state":state])}
                     else {self.post(["type":"playbackCheck","playing":state["playing"] ?? false,"id":self.albumByTrack[id] ?? ""])}
@@ -150,6 +154,16 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             if smoke {post(["type":"playbackCheck","playing":true,"id":f[2]]);return}
             run(albumByTrack[lastTrack]==f[2] ? ["resume"] : ["play",f[2]],serial:serial)
         case "resume":if !smoke {run(["resume"],serial:f.count>1 ? Int(f[1]) : nil)}
+        case "previousTrack","nextTrack","repeatOne","repeatAlbum":
+            guard !smoke,let album=albumByTrack[lastTrack],let tracks=tracksByAlbum[album],
+                  let bytes=try? JSONEncoder().encode(tracks) else {post(["type":"albumCommandDone"]);return}
+            let command=f[0]
+            work.async {
+                var reply:[String:Any]=["type":"albumCommandDone"]
+                do {_=try Music.script([command,String(decoding:bytes,as:UTF8.self)])}
+                catch {reply["message"]=error.localizedDescription}
+                DispatchQueue.main.async {self.poll();self.post(reply)}
+            }
         case "toggle":if !smoke {run(["toggle"])}
         case "lyrics":
             attachLyrics();lyrics.panel.orderFront(nil);lyricsTrack="!";loadLyrics(lastTrack)
@@ -204,8 +218,8 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         let albums=(1...3).map{["id":String($0),"title":"Album "+String($0),"artist":"Self Coverflow","cover":String($0),"favorite":true] as [String:Any]}
         post(["type":"library","albums":albums])
         DispatchQueue.main.asyncAfter(deadline:.now()+1.5){
-            self.web.evaluateJavaScript("(()=>{document.querySelector('[data-size=half]').click();return {n:all.length,lang:document.documentElement.lang,width:innerWidth,cover:!!document.querySelector('.cover img')?.naturalWidth}})()"){value,error in
-                guard error==nil,let r=value as? [String:Any],r["n"] as? Int==3,r["cover"] as? Bool==true,(r["lang"] as? String)?.hasPrefix(self.en ? "en":"zh")==true else {fputs("WK smoke failed: "+String(describing:value)+" "+String(describing:error)+"\n",stderr);exit(3)}
+            self.web.evaluateJavaScript("(()=>{document.querySelector('[data-size=half]').click();return {n:all.length,lang:document.documentElement.lang,repeatVisible:!document.getElementById('repeat').hidden,cover:!!document.querySelector('.cover img')?.naturalWidth}})()"){value,error in
+                guard error==nil,let r=value as? [String:Any],r["n"] as? Int==3,r["cover"] as? Bool==true,r["repeatVisible"] as? Bool==true,(r["lang"] as? String)?.hasPrefix(self.en ? "en":"zh")==true else {fputs("WK smoke failed: "+String(describing:value)+" "+String(describing:error)+"\n",stderr);exit(3)}
                 DispatchQueue.main.asyncAfter(deadline:.now()+0.4){exit(self.mode=="half" ? 0:4)}
             }
         }

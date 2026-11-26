@@ -59,11 +59,11 @@ internal static class MusicClient
         if(!uniqueTitle && Find(header,Property.UIA_NamePropertyId,album.artist)==null)return null;
         return Id(header,"PlayButtonElement") ?? Id(root,"PlayButtonElement");
     }
-    internal static bool Play(Album album,bool uniqueTitle,Func<bool> cancelled)
+    static Element OpenAlbum(Element root,Album album,bool uniqueTitle,Func<bool> cancelled)
     {
-        var root=MainWindow();if(root==null || cancelled())return false;
+        if(root==null || cancelled())return null;
         var current=AlbumButton(root,album,uniqueTitle);
-        if(current!=null && !cancelled())return Invoke(current);
+        if(current!=null && !cancelled())return current;
         var nav=Id(root,"Sidebar_Library_Albums");
         if(nav==null){
             var header=Pattern<IUIAutomationExpandCollapsePattern>(Id(root,"Sidebar_Header_Library"),PatternId.UIA_ExpandCollapsePatternId);
@@ -71,11 +71,11 @@ internal static class MusicClient
             nav=Id(root,"Sidebar_Library_Albums");
         }
         var select=Pattern<IUIAutomationSelectionItemPattern>(nav,PatternId.UIA_SelectionItemPatternId);
-        if(select==null || cancelled())return false;
+        if(select==null || cancelled())return null;
         // Apple Music keeps Albums selected while showing a library album's detail page.
         // Selecting it again leaves that page open. Back restores the album grid.
         if(select.CurrentIsSelected!=0 && Id(root,"ContainerDetailHeaderLockupRegularContent")!=null){
-            if(!Invoke(Id(root,"NavigationViewBackButton")))return false;
+            if(!Invoke(Id(root,"NavigationViewBackButton")))return null;
         }else select.Select();
         Element grid=null;
         var libraryGrid=Client.CreateAndCondition(Client.CreatePropertyCondition(Property.UIA_ClassNamePropertyId,"GridView"),
@@ -84,7 +84,7 @@ internal static class MusicClient
             grid=root.FindFirst(Descendants,libraryGrid);
             if(grid==null)Thread.Sleep(75);
         }
-        if(grid==null || cancelled())return false;
+        if(grid==null || cancelled())return null;
         var scroll=Pattern<IUIAutomationScrollPattern>(grid,PatternId.UIA_ScrollPatternId);
         double page=scroll==null?100:Math.Max(.5,Math.Min(100,scroll.CurrentVerticalViewSize));
         var cards=Client.CreatePropertyCondition(Property.UIA_ClassNamePropertyId,"GridViewItem");
@@ -104,13 +104,13 @@ internal static class MusicClient
                 if(!Matches(label,album,uniqueTitle))continue;
                 var title=Id(item,"TitleTextBlock");
                 if(title==null || !string.Equals(title.CurrentName,album.title,StringComparison.OrdinalIgnoreCase))continue;
-                if(cancelled() || !Invoke(item))return false;
+                if(cancelled() || !Invoke(item))return null;
                 for(int i=0;i<28 && !cancelled();i++){
                     var play=AlbumButton(root,album,uniqueTitle);
-                    if(play!=null && !cancelled())return Invoke(play);
+                    if(play!=null && !cancelled())return play;
                     Thread.Sleep(90);
                 }
-                return false;
+                return null;
             }
             if(scroll==null || scroll.CurrentVerticallyScrollable==0)break;
             if(pageAt<0 && tryRemembered){pageAt=remembered;continue;}
@@ -118,7 +118,117 @@ internal static class MusicClient
             if(pageAt>=100)break;
             pageAt=pageAt<0?0:Math.Min(100,pageAt+page);
         }
+        return null;
+    }
+
+    internal static bool Play(Album album,bool uniqueTitle,Func<bool> cancelled)
+    {
+        var button=OpenAlbum(MainWindow(),album,uniqueTitle,cancelled);
+        return !cancelled() && Invoke(button);
+    }
+
+    internal static bool PlayTrack(Album album,bool uniqueTitle,AlbumTrack track,Func<bool> cancelled)
+    {
+        var root=MainWindow();
+        if(OpenAlbum(root,album,uniqueTitle,cancelled)==null || cancelled())return false;
+        var header=Id(root,"ContainerDetailHeaderLockupRegularContent") ?? Id(root,"SingleItemSectionContent");
+        var walker=Client.ControlViewWalker;
+        var list=header;
+        while(list!=null && list.CurrentClassName!="ListView")list=walker.GetParentElement(list);
+        if(list==null)return false;
+        var scroll=Pattern<IUIAutomationScrollPattern>(list,PatternId.UIA_ScrollPatternId);
+        var cond=Client.CreatePropertyCondition(Property.UIA_ClassNamePropertyId,"ListViewItem");
+        bool unique=album.tracks.Count(t=>String.Equals(t.Title,track.Title,StringComparison.OrdinalIgnoreCase))==1;
+        double page=scroll==null?100:Math.Max(1,Math.Min(100,scroll.CurrentVerticalViewSize*.8));
+        for(double at=-1;!cancelled();at=at<0?0:Math.Min(100,at+page)){
+            if(at>=0){scroll.SetScrollPercent(-1,at);Thread.Sleep(100);}
+            var rows=list.FindAll(Descendants,cond);
+            for(int i=0;i<rows.Length;i++){
+                var row=rows.GetElement(i);
+                if(Find(row,Property.UIA_NamePropertyId,track.Title)==null)continue;
+                if(!unique && (String.IsNullOrEmpty(track.Artist) || Find(row,Property.UIA_NamePropertyId,track.Artist)==null))continue;
+                if(row.CurrentIsOffscreen!=0){
+                    var scrollItem=Pattern<IUIAutomationScrollItemPattern>(row,PatternId.UIA_ScrollItemPatternId);
+                    if(scrollItem!=null){scrollItem.ScrollIntoView();Thread.Sleep(120);}
+                }
+                var moreButtons=row.FindAll(Descendants,Client.CreatePropertyCondition(Property.UIA_ClassNamePropertyId,"Button"));
+                Element more=null;
+                for(int n=0;n<moreButtons.Length;n++){
+                    var button=moreButtons.GetElement(n);
+                    if(IsMoreLabel(button.CurrentName)){more=button;break;}
+                }
+                if(cancelled() || !Invoke(more))return false;
+                return InvokeTrackMenu(root,track.Title,cancelled);
+            }
+            if(scroll==null || scroll.CurrentVerticallyScrollable==0 || at>=100)break;
+        }
         return false;
+    }
+
+    static bool IsMoreLabel(string label)
+    {
+        return new[]{"More","More Options","More Actions","更多","更多选项","更多選項"}
+            .Contains((label??"").Trim(),StringComparer.OrdinalIgnoreCase);
+    }
+
+    static bool InvokeTrackMenu(Element root,string title,Func<bool> cancelled)
+    {
+        // Invoking a WinUI track row selects it. Its More menu has a separate
+        // Play “title” action that starts this track in its album queue.
+        for(int wait=0;wait<24 && !cancelled();wait++){
+            var menu=Find(root,Property.UIA_ClassNamePropertyId,"MenuFlyout");
+            if(menu!=null){
+                var entries=menu.FindAll(Descendants,Client.CreatePropertyCondition(Property.UIA_ClassNamePropertyId,"MenuFlyoutItem"));
+                for(int n=0;n<entries.Length;n++){
+                    var entry=entries.GetElement(n);
+                    var label=(entry.CurrentName??"").Trim();
+                    string prefix=label.StartsWith("Play ",StringComparison.OrdinalIgnoreCase)?"Play ":
+                        label.StartsWith("播放",StringComparison.Ordinal)?"播放":null;
+                    if(prefix==null)continue;
+                    var name=label.Substring(prefix.Length).Trim().Trim('“','”','「','」','"');
+                    if(String.Equals(name,title,StringComparison.OrdinalIgnoreCase))return !cancelled() && Invoke(entry);
+                }
+            }
+            Thread.Sleep(75);
+        }
+        return false;
+    }
+
+    internal static string RepeatMode()
+    {
+        var button=Id(MainWindow(),"RepeatButton");
+        if(button==null || button.CurrentIsEnabled==0)return null;
+        return ParseRepeatMode(button.CurrentName);
+    }
+
+    internal static string ParseRepeatMode(string name)
+    {
+        var label=(name??"").Trim().ToLowerInvariant();
+        if(label.Contains("不重复") || label.Contains("不重複") || label.Contains("关闭") ||
+            label.Contains("off") || label.Contains("none") || label.Contains("no repeat"))return "off";
+        if(label.Contains("单曲") || label.Contains("一首") || label.Contains("一項") || label.Contains("單曲") || label.Contains("重复播放一") || label.Contains("one") || label.Contains("1"))return "one";
+        if(label.Contains("全部") || label.Contains("所有") || label.Contains("all"))return "album";
+        return null;
+    }
+
+    internal static bool SetRepeat(string target,Func<bool> cancelled)
+    {
+        for(int n=0;n<3 && !cancelled();n++){
+            string before=RepeatMode();
+            if(before==target)return true;
+            if(before==null || n==2 || !Invoke(Id(MainWindow(),"RepeatButton")))return false;
+            for(int i=0;i<20 && !cancelled() && RepeatMode()==before;i++)Thread.Sleep(50);
+        }
+        return false;
+    }
+
+    internal static double Scrubber(double? setTo=null)
+    {
+        var slider=Pattern<IUIAutomationRangeValuePattern>(Id(MainWindow(),"LCDScrubber"),PatternId.UIA_RangeValuePatternId);
+        if(slider==null)return -1;
+        if(setTo.HasValue && slider.CurrentIsReadOnly==0)
+            slider.SetValue(Math.Max(slider.CurrentMinimum,Math.Min(slider.CurrentMaximum,setTo.Value)));
+        return slider.CurrentValue;
     }
 
     [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr window);

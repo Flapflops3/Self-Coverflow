@@ -43,6 +43,7 @@ internal sealed class Shelf : Form
     int request;
     readonly SemaphoreSlim transportCommands=new SemaphoreSlim(1,1);
     int verifiedToggles,verifiedOpens;
+    string albumQueueId;
     Point dragCursor,dragOrigin;
     long dbStamp=-1,artStamp=-1;
     string lastMedia="";
@@ -253,14 +254,64 @@ internal sealed class Shelf : Form
         try {
             MediaState state;
             try {state=await Playback.State(albums);} catch {state=new MediaState();}
+            if(albumQueueId!=state.albumId)albumQueueId=null;
             songTitle=state.title; if(lyrics!=null)lyrics.SetSong(songTitle);
             var current=json.Serialize(state);
             if(current!=lastMedia) {lastMedia=current; Post(new {type="media",state});}
             else if(confirm)Post(new {type="playbackCheck",playing=state.playing,id=state.albumId});
         } finally {polling=false;}
     }
+    async Task<bool> AlbumTransport(string cmd,int token)
+    {
+        Func<bool> cancelled=()=>Volatile.Read(ref request)!=token || IsDisposed;
+        var state=await Playback.State(albums,false);
+        var album=albums.FirstOrDefault(a=>a.id==state.albumId);
+        if(album==null || cancelled())return false;
+        bool unique=albums.Count(a=>String.Equals(a.title,album.title,StringComparison.OrdinalIgnoreCase))==1;
+        if(cmd=="repeatOne")return await Task.Run(()=>MusicClient.SetRepeat("one",cancelled));
+        bool repeat=cmd=="repeatAlbum";
+        var target=album.RelativeTrack(state.title,state.artist,repeat?0:cmd=="nextTrack"?1:-1);
+        if(target==null)return false;
+        // Repeat All acts on the native queue. Opening the row in its album builds that queue
+        // even when playback originally came from a playlist or shuffled library.
+        if(!repeat || albumQueueId!=album.id){
+            double position=repeat?await Task.Run(()=>MusicClient.Scrubber()):-1;
+            if(cancelled() || !await Task.Run(()=>MusicClient.PlayTrack(album,unique,target,cancelled)))return false;
+            bool confirmed=false;
+            for(int i=0;i<35 && !cancelled();i++){
+                await Task.Delay(100);
+                var next=await Playback.State(albums,false);
+                if(next.albumId==album.id && next.playing && album.TrackIndex(next.title,next.artist)==album.tracks.IndexOf(target)){
+                    confirmed=true;break;
+                }
+            }
+            if(!confirmed || cancelled())return false;
+            albumQueueId=album.id;
+            if(repeat && state.paused && !await Playback.PauseForSwitch(cancelled))return false;
+            if(repeat && position>=0 && !cancelled())await Task.Run(()=>MusicClient.Scrubber(position));
+        }
+        return !repeat || await Task.Run(()=>MusicClient.SetRepeat("album",cancelled));
+    }
+
     async Task Command(string cmd)
     {
+        if(cmd=="previousTrack" || cmd=="nextTrack" || cmd=="repeatOne" || cmd=="repeatAlbum"){
+            if(verify){Post(new {type="albumCommandDone"});return;}
+            int albumToken=++request;
+            string message=null;
+            await transportCommands.WaitAsync();
+            try{
+                if(albumToken==request && !await AlbumTransport(cmd,albumToken))
+                    message=Edition.Text("Apple Music 未确认本次专辑播放操作。","Apple Music could not confirm the album playback change.");
+            }catch(Exception ex){Debug.WriteLine(ex);message=Edition.Text("Apple Music 播放控制暂不可用。","Apple Music playback controls are unavailable.");}
+            finally{transportCommands.Release();}
+            if(!IsDisposed){
+                // An older poll may still carry the previous repeat mode.
+                while(polling && !IsDisposed)await Task.Delay(30);
+                if(!IsDisposed){await PollMedia(true);Post(new {type="albumCommandDone",message});}
+            }
+            return;
+        }
         if(cmd=="syncPlayback"){await PollMedia(true);return;}
         if(verify && (cmd=="toggle" || cmd.StartsWith("resume:",StringComparison.Ordinal))){verifiedToggles++;return;}
         if(verify && cmd.StartsWith("open:",StringComparison.Ordinal)){verifiedOpens++;return;}
@@ -318,6 +369,7 @@ internal sealed class Shelf : Form
                     }else if(token==request){
                         bool unique=albums.Count(item=>String.Equals(item.title,a.title,StringComparison.OrdinalIgnoreCase))==1;
                         played=await Task.Run(()=>MusicClient.Play(a,unique,()=>Volatile.Read(ref request)!=token));
+                        if(played && token==request)albumQueueId=a.id;
                     }
                 }
             }

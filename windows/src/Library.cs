@@ -6,6 +6,13 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
+internal sealed class AlbumTrack
+{
+    internal readonly string Title, Artist;
+    internal readonly int Order;
+    internal AlbumTrack(string title,string artist,int order){Title=title;Artist=artist;Order=order;}
+}
+
 internal sealed class Album
 {
     public string id, title, artist, cover;
@@ -16,6 +23,18 @@ internal sealed class Album
     internal int firstOrder = int.MaxValue;
     internal uint added;
     internal readonly HashSet<string> songs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    internal readonly List<AlbumTrack> tracks = new List<AlbumTrack>();
+    internal int TrackIndex(string title,string artist) {
+        var matches = tracks.Select((track,index)=>new {track,index})
+            .Where(x=>String.Equals(x.track.Title,title,StringComparison.OrdinalIgnoreCase)).ToList();
+        if(matches.Count==1)return matches[0].index;
+        var exact=matches.Where(x=>String.Equals(x.track.Artist,artist,StringComparison.OrdinalIgnoreCase)).ToList();
+        return exact.Count==1?exact[0].index:-1;
+    }
+    internal AlbumTrack RelativeTrack(string title,string artist,int delta){
+        int index=TrackIndex(title,artist);
+        return index<0?null:tracks[(index+tracks.Count+delta)%tracks.Count];
+    }
     internal static string TrackKey(string title,string artist) { return (title??"").Trim()+"\n"+(artist??"").Trim(); }
 }
 
@@ -81,7 +100,10 @@ internal static class Library
         {
             string sig = Encoding.ASCII.GetString(b, p, 4);
             if (sig!="boma" && trackAlbum!=null && !String.IsNullOrWhiteSpace(songTitle))
+            {
                 trackAlbum.songs.Add(Album.TrackKey(songTitle,songArtist));
+                trackAlbum.tracks.Add(new AlbumTrack(songTitle,songArtist,order));
+            }
             if (sig != "boma" && trackAlbum != null && songId > 0 && order < trackAlbum.firstOrder)
             {
                 trackAlbum.firstSong=songId; trackAlbum.firstOrder=order;
@@ -124,7 +146,7 @@ internal static class Library
                     if (sub==301 || (sub==302 && String.IsNullOrEmpty(album.artist))) album.artist=Text(b,p,size);
                     if (sub==307) album.cloudId=Text(b,p,size);
                 }
-                if (trackAlbum != null && sub==1 && size>=328)
+                if (trackAlbum != null && sub==1 && size>=332)
                 {
                     trackAlbum.added=Math.Max(trackAlbum.added,U32(b,p+112));
                     ulong song=U64(b,p+324);
@@ -136,6 +158,7 @@ internal static class Library
             p += size;
         }
         if (!hasAlbumTable && albums.Count==0) throw new InvalidDataException(Edition.Text("未识别到专辑表。","The album table could not be found."));
+        foreach(var entry in albums.Values)entry.tracks.Sort((a,c)=>a.Order.CompareTo(c.Order));
         return albums.Values.Where(a=>!String.IsNullOrWhiteSpace(a.title)).OrderByDescending(a=>a.added)
             .ThenBy(a=>a.title,StringComparer.CurrentCultureIgnoreCase).ToList();
     }

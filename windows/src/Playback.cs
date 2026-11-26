@@ -10,7 +10,8 @@ internal sealed class MediaState
 {
     public bool available, playing, paused, canPlay, canPause;
     public string title="", album="", artist="";
-    public string albumId, artwork;
+    public string albumId, artwork, repeatMode;
+    public bool canStep, canRepeat;
 }
 
 internal static class Playback
@@ -89,6 +90,11 @@ internal static class Playback
         if(library!=null && !String.IsNullOrWhiteSpace(state.title)) {
             var match=MatchAlbum(library,state);
             state.albumId=match==null?null:match.id;
+            if(includeArtwork && match!=null && match.TrackIndex(state.title,state.artist)>=0) {
+                state.canStep=match.tracks.Count>1;
+                try {state.repeatMode=await Task.Run(()=>MusicClient.RepeatMode());}catch(Exception ex){Debug.WriteLine(ex);}
+                state.canRepeat=state.repeatMode!=null;
+            }
             if(includeArtwork && (match==null || String.IsNullOrEmpty(match.cover))) {
                 var key=Album.TrackKey(state.title,state.artist)+"\n"+state.album;
                 if(key!=artKey || artData==null) {

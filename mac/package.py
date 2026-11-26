@@ -42,7 +42,7 @@ ET.SubElement(ET.SubElement(dist,"allowed-os-versions"),"os-version",{"min":"13.
 ET.SubElement(ET.SubElement(dist,"choices-outline"),"line",{"choice":"app"})
 choice=ET.SubElement(dist,"choice",{"id":"app","visible":"false"})
 ET.SubElement(choice,"pkg-ref",{"id":identifier})
-ET.SubElement(dist,"pkg-ref",{"id":identifier,"version":"1.0.0"}).text="app.pkg"
+ET.SubElement(dist,"pkg-ref",{"id":identifier,"version":"1.0.0.2"}).text="app.pkg"
 ET.ElementTree(dist).write(folder/"distribution.xml",encoding="utf-8",xml_declaration=True)
 payload=folder/"payload"
 metadata=folder/"components.plist"
@@ -50,5 +50,5 @@ subprocess.run(["pkgbuild","--analyze","--root",str(payload),str(metadata)],chec
 components=plistlib.loads(metadata.read_bytes())
 for component in components: component["BundleIsRelocatable"]=False
 metadata.write_bytes(plistlib.dumps(components))
-subprocess.run(["pkgbuild","--root",str(payload),"--component-plist",str(metadata),"--identifier",identifier,"--version","1.0.0","--install-location","/Applications",str(folder/"app.pkg")],check=True)
+subprocess.run(["pkgbuild","--root",str(payload),"--component-plist",str(metadata),"--identifier",identifier,"--version","1.0.0.2","--install-location","/Applications",str(folder/"app.pkg")],check=True)
 

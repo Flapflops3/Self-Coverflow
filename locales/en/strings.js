@@ -1,4 +1,9 @@
 const ui = Object.freeze({
+  "previousTrack": "Previous track",
+  "nextTrack": "Next track",
+  "repeatAlbum": "Album repeat · Switch to repeat one",
+  "repeatOne": "Repeat one · Switch to album repeat",
+  "repeatOff": "Turn on album repeat",
   "starting": "Starting playback…",
   "playTimeout": "Apple Music has not confirmed playback.",
   "playing": "Now playing",

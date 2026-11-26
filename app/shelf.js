@@ -3,6 +3,29 @@ const $ = id => document.getElementById(id);
 const send = value => window.chrome.webview.postMessage(value);
 const stage = $('stage'), covers = $('covers');
 const nodes = new Map();
+const repeatButton = $('repeat');
+for (const [id,label] of [['prev',ui.previousTrack],['next',ui.nextTrack]]) {
+  $(id).title = label;
+  $(id).setAttribute('aria-label',label);
+  $(id).disabled = true;
+}
+repeatButton.hidden = false;
+repeatButton.disabled = true;
+let transportBusy = false;
+function updateAlbumTransport() {
+  const mode = media.repeatMode || 'off';
+  const label = mode === 'one' ? ui.repeatOne : mode === 'album' ? ui.repeatAlbum : ui.repeatOff;
+  repeatButton.dataset.mode = mode;
+  repeatButton.title = label;
+  repeatButton.setAttribute('aria-label',label);
+  repeatButton.disabled = transportBusy || !media.canRepeat || !!pendingPlay;
+  $('prev').disabled = $('next').disabled = transportBusy || !media.canStep || !!pendingPlay;
+}
+function albumCommand(command) {
+  transportBusy = true;
+  updateAlbumTransport();
+  send(command);
+}
 let all = [], visible = [], index = 0;
 let mode = localStorage.getItem('scope') || 'favorites';
 let docked = false, media = {}, noticeTimer, suppressClick = false;
@@ -104,6 +127,7 @@ function browsing() {
 }
 
 function status() {
+  updateAlbumTransport();
   $('status').classList.toggle('pending',!!pendingPlay);
   $('status').textContent = pendingPlay ? ui.starting+(pendingPlay.title?' · '+pendingPlay.title:'') : media.title ? (media.playing ? ui.playing : ui.paused) + ' · ' + media.title : '';
   $('transport').classList.toggle('playing',Boolean(media.playing));
@@ -272,7 +296,6 @@ function draw() {
   $('album').textContent = a ? a.title : (mode === 'favorites' ? ui.noFavorites : ui.empty);
   $('artist').textContent = a ? a.artist || ui.unknown : (mode === 'favorites' ? ui.browseAll : ui.add);
   $('album').title = $('album').textContent; $('artist').title = $('artist').textContent;
-  for (const id of ['prev','next']) $(id).disabled = length < 2;
   const keep = new Set();posed=[];
   const left=Math.min(radius,Math.floor((length-1)/2)),right=Math.min(radius,length-1-left);
   for (let offset = -left; length && offset <= right; offset++) {
@@ -321,7 +344,9 @@ function paintCovers(){
   }
 }
 function step(amount) { if (visible.length>1) select(index + amount); }
-$('prev').onclick = () => step(-1); $('next').onclick = () => step(1);
+$('prev').onclick = () => albumCommand('previousTrack');
+$('next').onclick = () => albumCommand('nextTrack');
+repeatButton.onclick = () => albumCommand(media.repeatMode === 'album' ? 'repeatOne' : 'repeatAlbum');
 $('transport').onclick = () => {
   if(media.playing){
     if(driveSoundEnabled)driveSound.unlock();
@@ -435,7 +460,9 @@ $('grip').onpointermove=e=>{if($('grip').hasPointerCapture(e.pointerId))send('dr
 $('grip').onlostpointercapture=()=>send(reducedMotion.matches?'dragEnd:instant':'dragEnd');
 document.addEventListener('keydown',e=>{
   if(e.target.closest('#lookup') || e.isComposing)return;
-  if(e.key==='ArrowLeft')step(-1);else if(e.key==='ArrowRight')step(1);
+  if(e.key==='ArrowLeft' || e.key==='ArrowRight'){
+    if (!e.repeat) $(e.key==='ArrowLeft'?'prev':'next').click();
+  }
   else if(e.key==='Enter' && !e.target.closest('button'))openSelected();
   else if(e.key===' ' && !e.target.closest('button'))$('transport').click();
   else if(e.key==='Escape'){
@@ -461,6 +488,7 @@ window.chrome.webview.addEventListener('message',e=>{
     if(pendingPlay && media.playing && (!pendingPlay.id || pendingPlay.id===currentAlbum()?.id))confirmPlayback();
     status();updateList(true,first);}
   else if(x.type==='playbackCheck' && x.playing && pendingPlay && (!pendingPlay.id || pendingPlay.id===(x.id || currentAlbum()?.id)))confirmPlayback();
+  else if(x.type==='albumCommandDone'){transportBusy=false;updateAlbumTransport();if(x.message)notice(x.message);}
   else if(x.type==='playFailed' && x.serial===pendingPlay?.serial)endPending(x.message);
   else if(x.type==='viewport'){
     document.documentElement.style.setProperty('--shelf-width',(x.fraction*100)+'vw');
@@ -485,7 +513,7 @@ window.shelfCheck=()=>{
   const before=index, scope=mode;
   const images=[...covers.querySelectorAll('img')].filter(i=>i.complete&&i.naturalWidth).length;
   stage.dispatchEvent(new WheelEvent('wheel',{deltaY:90,cancelable:true})); const advanced=index!==before;
-  $('prev').click(); const returned=index===before;
+  step(-1); const returned=index===before;
   toggleFilter();const switched=scope!==mode;toggleFilter();
   return {passed:advanced&&returned&&switched&&images>0,total:all.length,favorites:all.filter(a=>a.favorite).length,
     cached:all.filter(a=>a.cover).length,visibleImages:images,desktop:docked,selected:visible[index]?.title};
