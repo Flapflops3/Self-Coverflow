@@ -1,4 +1,5 @@
 const ui = Object.freeze({
+  "players": {"apple":"Apple Music","spotify":"Spotify","qq":"QQ Music","kugou":"KuGou Music"},
   "noPlayers": "No supported player found",
   "localReplay": "Select this album in the music player to play it.",
   "queueRepeat": "Queue repeat · Switch to repeat one",

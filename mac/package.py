@@ -18,8 +18,8 @@ def page(file, heading, steps):
 page("welcome.html", "Self Coverflow", [
     ("Your albums, on your desktop.", "This installer places the English edition in Applications. It runs on Apple silicon and Intel Macs with macOS 13 or later.") if en else
     ("把唱片放在桌面上", "向导将把简体中文版安装到「应用程序」。支持 macOS 13 或更新版本的 Apple 芯片和 Intel Mac。"),
-    ("Before you begin", "Play a song in your desktop music player. In Self Coverflow, choose it under More → Music source.") if en else
-    ("安装前", "在桌面音乐软件中播放歌曲，然后在唱片架的「更多 → 音乐来源」中选择该软件。"),
+    ("Before you begin", "Play a song in your desktop music player. With multiple players open, choose one beside the pin.") if en else
+    ("安装前", "在桌面音乐软件中播放歌曲。打开多款播放器时，可点击图钉旁的按钮切换。"),
     ("Continue to install", "Your Music library stays on this Mac. The first launch asks permission to control Music.") if en else
     ("继续安装", "唱片架在本机读取资料库。首次启动时，系统会询问是否允许控制「音乐」。")
 ])

@@ -4,12 +4,10 @@ const send = value => window.chrome.webview.postMessage(value);
 const stage = $('stage'), covers = $('covers');
 const nodes = new Map();
 const repeatButton = $('repeat');
-const sourcePicker=$('musicSource');
-const playerOptions=Array.from(sourcePicker.options);
-const playerName=id=>playerOptions.find(option=>option.value===id)?.text || '';
+const playerName=id=>ui.players[id] || '';
+let runningPlayers=[];
 let source='apple';
 const recentShelves=new Map();
-sourcePicker.onchange=()=>{endPending();send('source:'+sourcePicker.value);};
 const playerControl=$('playerControl'), playerButton=$('playerButton'), playerMenu=$('playerMenu');
 
 function closePlayers(restoreFocus=false) {
@@ -17,21 +15,20 @@ function closePlayers(restoreFocus=false) {
   playerButton.setAttribute('aria-expanded','false');
   if(restoreFocus && !playerControl.hidden)playerButton.focus();
 }
-function updatePlayers(running,installed) {
-  const options=playerOptions.filter(option=>installed.includes(option.value));
-  sourcePicker.replaceChildren(...options);
-  sourcePicker.value=source;
-  sourcePicker.closest('label').hidden=options.length===0;
-  const focused=document.activeElement.dataset?.player;
-  playerControl.hidden=running.length<2;
+function updatePlayerButton(){
+  playerControl.hidden=runningPlayers.length===0 || (runningPlayers.length===1 && runningPlayers[0]===source);
   if(playerControl.hidden)closePlayers();
+}
+function updatePlayers(running) {
+  runningPlayers=Object.keys(ui.players).filter(id=>running.includes(id));
+  const focused=document.activeElement.dataset?.player;
+  updatePlayerButton();
   playerMenu.replaceChildren();
-  for(const option of sourcePicker.options){
-    if(!running.includes(option.value))continue;
+  for(const id of runningPlayers){
     const row=document.createElement('button');
-    row.type='button';row.dataset.player=option.value;row.textContent=option.text;
+    row.type='button';row.dataset.player=id;row.textContent=playerName(id);
     row.setAttribute('role','menuitemradio');
-    row.setAttribute('aria-checked',String(source===option.value));
+    row.setAttribute('aria-checked',String(source===id));
     row.tabIndex=-1;
     playerMenu.append(row);
   }
@@ -47,7 +44,7 @@ playerMenu.onclick=e=>{
   const row=e.target.closest('[data-player]');
   if(!row)return;
   closePlayers(true);
-  if(source!==row.dataset.player){sourcePicker.value=row.dataset.player;sourcePicker.onchange();}
+  if(source!==row.dataset.player){endPending();send('source:'+row.dataset.player);}
 };
 playerControl.onkeydown=e=>{
   if(e.key==='Escape'){closePlayers(true);}
@@ -529,7 +526,7 @@ $('grip').addEventListener('pointerdown',e=>{
 $('grip').onpointermove=e=>{if($('grip').hasPointerCapture(e.pointerId))send('drag');};
 $('grip').onlostpointercapture=()=>send(reducedMotion.matches?'dragEnd:instant':'dragEnd');
 document.addEventListener('keydown',e=>{
-  if(e.target.closest('#lookup,#playerControl,select') || e.isComposing)return;
+  if(e.target.closest('#lookup,#playerControl') || e.isComposing)return;
   if(e.key==='ArrowLeft' || e.key==='ArrowRight'){
     if (!e.repeat) $(e.key==='ArrowLeft'?'prev':'next').click();
   }
@@ -542,9 +539,9 @@ document.addEventListener('keydown',e=>{
 });
 window.chrome.webview.addEventListener('message',e=>{
   const x=e.data;
-  if(x.type==='runningPlayers'){updatePlayers(x.players,x.installed);return;}
+  if(x.type==='runningPlayers'){updatePlayers(x.players);return;}
   if(x.type==='source'){
-    source=x.source;sourcePicker.value=source;
+    source=x.source;updatePlayerButton();
     playerButton.title=playerMenu.getAttribute('aria-label')+' · '+playerName(source);
     playerButton.setAttribute('aria-label',playerButton.title);
     for(const row of playerMenu.children)row.setAttribute('aria-checked',String(row.dataset.player===source));

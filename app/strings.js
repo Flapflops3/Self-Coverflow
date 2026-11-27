@@ -1,4 +1,5 @@
 const ui = Object.freeze({
+  "players": {"apple":"Apple Music","spotify":"Spotify","qq":"QQ 音乐","kugou":"酷狗音乐"},
   "noPlayers": "未检测到支持的播放器",
   "localReplay": "请在音乐软件中选择这张专辑播放。",
   "queueRepeat": "队列循环 · 切换为单曲循环",

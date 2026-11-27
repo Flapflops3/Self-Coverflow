@@ -8,7 +8,7 @@ A white **Cover Flow desktop widget for Apple Music** on Windows and macOS. Flip
 
 ## Local music sources (test branch)
 
-With multiple supported players running, use the player button beside the pin to see the running apps and switch control. Your selection is remembered. **More → Music source** lists supported apps installed on this computer, including ones that are closed. For the three new sources, play a track in the desktop app first. The shelf follows the current album and keeps up to 16 album covers per source in memory for this session. The transport buttons control that player’s queue when it exposes the corresponding commands. Personal cloud libraries, starting a previously heard album and synchronized lyrics are available only through the Apple Music integration in this build.
+With multiple supported players running, use the player button beside the pin to see the running apps and switch control. Your selection is remembered. For the three new sources, play a track in the desktop app first. The shelf follows the current album and keeps up to 16 album covers per source in memory for this session. The transport buttons control that player’s queue when it exposes the corresponding commands. Personal cloud libraries, starting a previously heard album and synchronized lyrics are available only through the Apple Music integration in this build.
 
 Windows uses the player's system media controls. If KuGou is missing, enable system playback controls in KuGou settings. On Mac, make the selected player the system Now Playing app. The universal installer includes mediaremote-adapter 0.9.0. Neither platform needs a developer ID for local playback.
 
