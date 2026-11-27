@@ -12,8 +12,8 @@ Choose your system and language. English and Simplified Chinese are separate app
 
 | System | English | 简体中文 |
 | --- | --- | --- |
-| Windows x64 | [Download for Windows · EN](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.2/Self-Coverflow-Windows-x64-en-Setup.exe) | [下载 Windows 中文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.2/Self-Coverflow-Windows-x64-zh-Setup.exe) |
-| macOS 13+ · Apple silicon and Intel | [Download for Mac · EN](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.2/Self-Coverflow-macOS-universal-en.pkg) | [下载 Mac 中文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.2/Self-Coverflow-macOS-universal-zh.pkg) |
+| Windows x64 | [Download for Windows · EN](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.3/Self-Coverflow-Windows-x64-en-Setup.exe) | [下载 Windows 中文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.3/Self-Coverflow-Windows-x64-zh-Setup.exe) |
+| macOS 13+ · Apple silicon and Intel | [Download for Mac · EN](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.3/Self-Coverflow-macOS-universal-en.pkg) | [下载 Mac 中文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.3/Self-Coverflow-macOS-universal-zh.pkg) |
 
 **Windows 10 22H2 / Windows 11 (x64).** Run the downloaded `Setup.exe`. The wizard checks Apple Music and WebView2, opens the Microsoft Store if you need Music, and installs Microsoft's WebView2 Runtime if missing. You can choose a desktop shortcut and start-with-Music option. Open the installed edition from the Start menu. This beta installer is unsigned.
 

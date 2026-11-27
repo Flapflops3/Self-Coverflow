@@ -52,6 +52,11 @@ internal static class Desktop
     {
         SetWindowPos(window,new IntPtr(pinned?-1:-2),0,0,0,0,NoMove|NoSize|NoActivate|NoOwnerZOrder);
     }
+    internal static void Raise(IntPtr window)
+    {
+        SetWindowPos(window,IsTopmost(window)?new IntPtr(-1):IntPtr.Zero,0,0,0,0,
+            NoMove|NoSize|NoActivate|NoOwnerZOrder|Show);
+    }
     internal static IntPtr Attach(IntPtr handle)
     {
         IntPtr shell=IntPtr.Zero;

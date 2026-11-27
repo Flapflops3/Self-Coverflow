@@ -327,7 +327,7 @@ internal sealed class Shelf : Form
                 lyrics=new LyricsPane(ScreenBounds,scale,cmd=="lyrics:instant");
                 lyrics.FormClosed+=delegate{lyrics=null;};
                 lyrics.SetSong(songTitle);lyrics.Start(pinned,desktopParent!=IntPtr.Zero);
-            }else{lyrics.SetBoundsFromShelf();}
+            }else{lyrics.ShowRequested();}
             return;
         }
         if(cmd=="close"){Close();return;}

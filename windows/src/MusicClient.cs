@@ -237,6 +237,7 @@ internal static class MusicClient
         internal string[] Lines=new string[0];
         internal int First=-1;
         internal int[] Buttons,PanelId;
+        internal IntPtr Window;
         internal Lyrics At(int index){var next=(Lyrics)MemberwiseClone();next.First=index;return next;}
     }
 
@@ -303,22 +304,85 @@ internal static class MusicClient
     static IUIAutomationCondition LyricButtons(){
         return Client.CreatePropertyCondition(Property.UIA_ControlTypePropertyId,UIA_ControlTypeIds.UIA_ButtonControlTypeId);
     }
-    internal static Lyrics ReadLyrics(LyricTracker tracker,bool open,ref bool openedHere)
+    // MiniPlayer is a separate top-level WinUI window with a localized title.
+    // Stay inside the Apple Music process, including when a player is minimized.
+    static IEnumerable<IntPtr> PlayerWindows()
+    {
+        var ids=new HashSet<int>();
+        foreach(var app in Process.GetProcessesByName("AppleMusic"))using(app){ids.Add(app.Id);}
+        IntPtr window=IntPtr.Zero;
+        while((window=FindWindowEx(IntPtr.Zero,window,"WinUIDesktopWin32WindowClass",null))!=IntPtr.Zero){
+            int pid;GetWindowThreadProcessId(window,out pid);
+            if(ids.Contains(pid) && Desktop.IsWindowVisible(window))yield return window;
+        }
+    }
+    static Element LyricsToggle(Element root)
+    {
+        var toggle=Id(root,"LyricsToggleButton");
+        if(toggle!=null)return toggle;
+        foreach(var label in new[]{"Lyrics","歌词","歌詞","Show Lyrics","Hide Lyrics"}){
+            var condition=Client.CreateAndCondition(Client.CreatePropertyCondition(Property.UIA_NamePropertyId,label),
+                Client.CreatePropertyCondition(Property.UIA_IsTogglePatternAvailablePropertyId,true));
+            toggle=root.FindFirst(Descendants,condition);
+            if(toggle!=null)return toggle;
+        }
+        return null;
+    }
+    internal sealed class LyricsAccess
+    {
+        internal IntPtr lastPlayer;
+        internal readonly Dictionary<IntPtr,int[]> opened=new Dictionary<IntPtr,int[]>();
+        internal void Close(){
+            foreach(var hwnd in PlayerWindows()){
+                int[] id;
+                if(!opened.TryGetValue(hwnd,out id))continue;
+                var button=LyricsToggle(Client.ElementFromHandle(hwnd));
+                if(button==null || !button.GetRuntimeId().SequenceEqual(id))continue;
+                var toggle=Pattern<IUIAutomationTogglePattern>(button,PatternId.UIA_TogglePatternId);
+                if(toggle!=null && toggle.CurrentToggleState==ToggleState.ToggleState_On)toggle.Toggle();
+            }
+        }
+    }
+    internal static Lyrics ReadLyrics(LyricTracker tracker,bool open,LyricsAccess access)
     {
         var frame=open?null:tracker.FastFrame();if(frame!=null)return frame;
-        var result=new Lyrics();var root=MainWindow();
-        if(root==null)return result;
-        if(open){
-            var toggle=Pattern<IUIAutomationTogglePattern>(Id(root,"LyricsToggleButton"),PatternId.UIA_TogglePatternId);
-            if(toggle!=null && toggle.CurrentToggleState==ToggleState.ToggleState_Off){toggle.Toggle();openedHere=true;}
+        IntPtr first=IntPtr.Zero;
+        Element button=null;
+        foreach(var hwnd in PlayerWindows()){
+            try{
+                var root=Client.ElementFromHandle(hwnd);
+                var panel=Id(root,"TimeBasedLyrics");
+                if(panel!=null){
+                    var timed=ReadTimedLyrics(tracker,hwnd,panel);
+                    if(timed.Lines.Length>0)return timed;
+                }
+                var plain=Id(root,"StaticLyricsTextBlock") ?? Id(root,"StaticLyrics");
+                if(plain!=null){
+                    var text=(plain.CurrentName??"").Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries);
+                    if(text.Length>0){
+                        var sheet=new Lyrics{Lines=text,Window=hwnd};
+                        tracker.Remember(sheet,null,100,96);return sheet;
+                    }
+                }
+                if(first==IntPtr.Zero){
+                    var candidate=LyricsToggle(root);
+                    if(candidate!=null && candidate.CurrentIsEnabled!=0){first=hwnd;button=candidate;}
+                }
+            }catch(COMException){/* A player can close while switching modes. */}
         }
-        var panel=Id(root,"TimeBasedLyrics");
-        if(panel==null){
-            var plain=Id(root,"StaticLyrics") ?? Id(root,"StaticLyricsTextBlock");
-            if(plain!=null)result.Lines=(plain.CurrentName??"").Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries);
-            tracker.Remember(result,null,100,96);
-            return result;
+        if(button!=null && (open || first!=access.lastPlayer)){
+            var toggle=Pattern<IUIAutomationTogglePattern>(button,PatternId.UIA_TogglePatternId);
+            if(toggle!=null && toggle.CurrentToggleState==ToggleState.ToggleState_Off){
+                var id=button.GetRuntimeId();
+                toggle.Toggle();access.opened[first]=id;
+            }
         }
+        access.lastPlayer=first;
+        var empty=new Lyrics();tracker.Remember(empty,null,100,96);return empty;
+    }
+    static Lyrics ReadTimedLyrics(LyricTracker tracker,IntPtr window,Element panel)
+    {
+        var result=new Lyrics{Window=window};
         var rect=panel.CurrentBoundingRectangle;
         var scroll=Pattern<IUIAutomationScrollPattern>(panel,PatternId.UIA_ScrollPatternId);
         var cache=Client.CreateCacheRequest();cache.AddProperty(Property.UIA_NamePropertyId);cache.AddProperty(Property.UIA_BoundingRectanglePropertyId);
@@ -331,7 +395,7 @@ internal static class MusicClient
             tops.Add(box.bottom-box.top>3 && box.top>rect.top && box.top<rect.bottom?box.top-rect.top:double.NaN);
         }
         result.Lines=lines.ToArray();result.Buttons=indices.ToArray();result.PanelId=panel.GetRuntimeId();
-        double dpi=GetDpiForWindow((IntPtr)root.CurrentNativeWindowHandle),view=scroll==null?100:scroll.CurrentVerticalViewSize;
+        double dpi=GetDpiForWindow(window),view=scroll==null?100:scroll.CurrentVerticalViewSize;
         result.First=tracker.Locate(result.Lines,tops.ToArray(),rect.right-rect.left,rect.bottom-rect.top,dpi,
             scroll==null?-1:scroll.CurrentVerticalScrollPercent,view);
         tracker.Remember(result,scroll,view,dpi);
@@ -340,7 +404,8 @@ internal static class MusicClient
     internal static bool SeekLine(Lyrics snapshot,int index)
     {
         if(snapshot==null || snapshot.Buttons==null || index<0 || index>=snapshot.Lines.Length)return false;
-        var panel=Id(MainWindow(),"TimeBasedLyrics");
+        if(!PlayerWindows().Contains(snapshot.Window))return false;
+        var panel=Id(Client.ElementFromHandle(snapshot.Window),"TimeBasedLyrics");
         if(panel==null || !panel.GetRuntimeId().SequenceEqual(snapshot.PanelId))return false;
         var cache=Client.CreateCacheRequest();cache.AddProperty(Property.UIA_NamePropertyId);
         var rows=panel.FindAllBuildCache(Descendants,LyricButtons(),cache);
@@ -349,10 +414,5 @@ internal static class MusicClient
         for(int i=0;i<snapshot.Lines.Length;i++)
             if((rows.GetElement(snapshot.Buttons[i]).CachedName??"").Trim()!=snapshot.Lines[i])return false;
         return Invoke(rows.GetElement(snapshot.Buttons[index]));
-    }
-    internal static void CloseLyrics()
-    {
-        var toggle=Pattern<IUIAutomationTogglePattern>(Id(MainWindow(),"LyricsToggleButton"),PatternId.UIA_TogglePatternId);
-        if(toggle!=null && toggle.CurrentToggleState==ToggleState.ToggleState_On)toggle.Toggle();
     }
 }

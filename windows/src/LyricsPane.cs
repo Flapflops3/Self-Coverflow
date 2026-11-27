@@ -24,7 +24,8 @@ internal sealed class LyricsPane : Form
     string song="",edge="bottom";
     double alignment=.5;
     Point dragPointer,dragOrigin,free;
-    bool moving,fetching,openToggle=true,openedHere,attached=true,reduce;
+    bool moving,fetching,openToggle=true,attached=true,reduce;
+    readonly MusicClient.LyricsAccess access=new MusicClient.LyricsAccess();
     IntPtr shell;
     double reveal;
     DateTime revealStart,manualUntil;
@@ -51,13 +52,21 @@ internal sealed class LyricsPane : Form
         };
         FormClosed+=delegate{
             poll.Dispose();slide.Dispose();
-            if(openedHere && !fetching)Task.Run((Action)CloseSource);
+            if(!fetching && access.opened.Count>0)Task.Run((Action)CloseSource);
         };
     }
     int Px(int value){return (int)Math.Round(value*scale);}
     internal void Start(bool pinned,bool docked){
         revealStart=DateTime.UtcNow;reveal=reduce?1:.02;SetBoundsFromShelf();
-        Show();SetMode(pinned,docked);slide.Start();poll.Start();var pending=UpdateText();
+        Show();SetMode(pinned,docked);ShowRequested();slide.Start();poll.Start();var pending=UpdateText();
+    }
+    internal void ShowRequested(){
+        if(WindowState==FormWindowState.Minimized)WindowState=FormWindowState.Normal;
+        if(!Visible)Show();
+        if(!attached && !Screen.AllScreens.Any(s=>s.WorkingArea.IntersectsWith(Desktop.Bounds(Handle))))attached=true;
+        SetBoundsFromShelf();
+        Desktop.Raise(Handle);
+        openToggle=true;
     }
     internal void SetSong(string title){if(song!=title){song=title;seekVersion++;seekTarget=-1;snapshot=pressedSheet=null;tracker=new MusicClient.LyricTracker();lines=new string[0];first=-1;target=scroll=0;measuredWidth=-1;Invalidate();}}
     internal void SetMode(bool pinned,bool docked){
@@ -97,12 +106,12 @@ internal sealed class LyricsPane : Form
         rect.Height=h;
         if(IsHandleCreated)Desktop.Place(Handle,shell,rect);else Bounds=rect;
     }
-    static void CloseSource(){try{MusicClient.CloseLyrics();}catch(InvalidOperationException){}catch(System.Runtime.InteropServices.COMException){}}
+    void CloseSource(){try{access.Close();}catch(InvalidOperationException){}catch(System.Runtime.InteropServices.COMException){}}
     async Task UpdateText(){
         if(fetching||IsDisposed)return;
         fetching=true;var source=tracker;int revision=seekVersion;string before=song;bool firstRead=openToggle;openToggle=false;
         try{
-            var data=await Task.Run(()=>MusicClient.ReadLyrics(source,firstRead,ref openedHere));
+            var data=await Task.Run(()=>MusicClient.ReadLyrics(source,firstRead,access));
             if(IsDisposed || before!=song || revision!=seekVersion)return;
             snapshot=data;
             bool newLines=!lines.SequenceEqual(data.Lines);
@@ -119,7 +128,7 @@ internal sealed class LyricsPane : Form
                 Invalidate();
             }
         }catch(InvalidOperationException){}catch(System.Runtime.InteropServices.COMException){}
-        finally{fetching=false;if(IsDisposed && openedHere)System.Threading.ThreadPool.QueueUserWorkItem(delegate{CloseSource();});}
+        finally{fetching=false;if(IsDisposed && access.opened.Count>0)System.Threading.ThreadPool.QueueUserWorkItem(delegate{CloseSource();});}
     }
     void MeasureLines(){
         if(measuredWidth==Width)return;
