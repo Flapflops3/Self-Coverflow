@@ -267,6 +267,16 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     }
     func windowWillClose(_ note:Notification){NSApp.terminate(nil)}
     func smokeTest(){
+        do {_=try LocalPlayer.state("spotify",artwork:false)}
+        catch {fputs("Bundled Now Playing reader failed: "+error.localizedDescription+"\n",stderr);exit(9)}
+        for (source,bundle) in LocalPlayer.bundles {
+            let row:[String:Any]=["bundleIdentifier":bundle,"title":"Fixture track","playing":true,
+                                  "supportedCommands":[["id":1,"enabled":true],["id":4,"enabled":true]]]
+            let state=LocalPlayer.state(source,metadata:row)
+            guard state["title"] as? String=="Fixture track",state["canNext"] as? Bool==true,
+                  state["canPrevious"] as? Bool==false,state["canPause"] as? Bool==true,
+                  LocalPlayer.state(source=="qq" ? "kugou":"qq",metadata:row)["available"] as? Bool==false else {exit(8)}
+        }
         resources.fixture=true;resources.allowed=["1","2","3"]
         let albums=(1...3).map{["id":String($0),"title":"Album "+String($0),"artist":"Self Coverflow","cover":String($0),"favorite":true] as [String:Any]}
         post(["type":"library","albums":albums])

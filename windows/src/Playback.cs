@@ -97,7 +97,8 @@ internal static class Playback
             available=true,playing=info.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
             paused=info.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused,
             title=p.Title,album=p.AlbumTitle,albumArtist=p.AlbumArtist,artist=p.Artist,artwork=await ReadArtwork(p.Thumbnail),
-            canPlay=controls.IsPlayEnabled,canPause=controls.IsPauseEnabled,canNext=controls.IsNextEnabled,
+            canPlay=controls.IsPlayEnabled || controls.IsPlayPauseToggleEnabled,
+            canPause=controls.IsPauseEnabled || controls.IsPlayPauseToggleEnabled,canNext=controls.IsNextEnabled,
             canPrevious=controls.IsPreviousEnabled,canRepeat=controls.IsRepeatEnabled && info.AutoRepeatMode.HasValue,
             repeatMode=info.AutoRepeatMode==Windows.Media.MediaPlaybackAutoRepeatMode.Track?"one":
                 info.AutoRepeatMode==Windows.Media.MediaPlaybackAutoRepeatMode.List?"album":"off"
@@ -112,9 +113,13 @@ internal static class Playback
         switch(command){
             case "nextTrack":return c.IsNextEnabled && await AsTask<bool>(session.TrySkipNextAsync());
             case "previousTrack":return c.IsPreviousEnabled && await AsTask<bool>(session.TrySkipPreviousAsync());
-            case "pause":return c.IsPauseEnabled && await AsTask<bool>(session.TryPauseAsync());
+            case "pause":
+                if(info.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused)return true;
+                return c.IsPauseEnabled?await AsTask<bool>(session.TryPauseAsync()):
+                    c.IsPlayPauseToggleEnabled && await AsTask<bool>(session.TryTogglePlayPauseAsync());
             case "resume":return info.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing ||
-                (c.IsPlayEnabled && await AsTask<bool>(session.TryPlayAsync()));
+                (c.IsPlayEnabled?await AsTask<bool>(session.TryPlayAsync()):
+                c.IsPlayPauseToggleEnabled && await AsTask<bool>(session.TryTogglePlayPauseAsync()));
             case "repeatAlbum":case "repeatOne":case "repeatOff":
                 var mode=command=="repeatAlbum"?Windows.Media.MediaPlaybackAutoRepeatMode.List:
                     command=="repeatOne"?Windows.Media.MediaPlaybackAutoRepeatMode.Track:Windows.Media.MediaPlaybackAutoRepeatMode.None;

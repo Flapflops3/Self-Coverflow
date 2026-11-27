@@ -22,8 +22,14 @@ enum LocalPlayer {
 
     static func state(_ source:String, artwork:Bool=true) throws -> [String:Any] {
         let data=try call(artwork ? ["get"] : ["get","--no-artwork"])
-        guard let bundle=bundles[source], !data.isEmpty,
-              let row=try JSONSerialization.jsonObject(with:data,options:.fragmentsAllowed) as? [String:Any],
+        guard !data.isEmpty,
+              let row=try JSONSerialization.jsonObject(with:data,options:.fragmentsAllowed) as? [String:Any]
+        else {return ["available":false]}
+        return state(source,metadata:row)
+    }
+
+    static func state(_ source:String, metadata row:[String:Any]) -> [String:Any] {
+        guard let bundle=bundles[source],
               [row["bundleIdentifier"] as? String,row["parentApplicationBundleIdentifier"] as? String].contains(bundle)
         else {return ["available":false]}
         let playing=row["playing"] as? Bool ?? false
