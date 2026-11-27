@@ -8,6 +8,54 @@ const sourcePicker=$('musicSource');
 let source='apple';
 const recentShelves=new Map();
 sourcePicker.onchange=()=>{endPending();send('source:'+sourcePicker.value);};
+const playerControl=$('playerControl'), playerButton=$('playerButton'), playerMenu=$('playerMenu');
+
+function closePlayers(restoreFocus=false) {
+  playerMenu.hidden=true;
+  playerButton.setAttribute('aria-expanded','false');
+  if(restoreFocus && !playerControl.hidden)playerButton.focus();
+}
+function updatePlayers(running) {
+  const focused=document.activeElement.dataset?.player;
+  playerControl.hidden=running.length<2;
+  if(playerControl.hidden)closePlayers();
+  playerMenu.replaceChildren();
+  for(const option of sourcePicker.options){
+    if(!running.includes(option.value))continue;
+    const row=document.createElement('button');
+    row.type='button';row.dataset.player=option.value;row.textContent=option.text;
+    row.setAttribute('role','menuitemradio');
+    row.setAttribute('aria-checked',String(source===option.value));
+    row.tabIndex=-1;
+    playerMenu.append(row);
+  }
+  if(focused && !playerMenu.hidden)(playerMenu.querySelector('[data-player="'+focused+'"]') || playerMenu.firstElementChild)?.focus();
+}
+function openPlayers() {
+  hideSearch();$('options').hidden=true;browsing();
+  playerMenu.hidden=false;playerButton.setAttribute('aria-expanded','true');
+  (playerMenu.querySelector('[aria-checked="true"]') || playerMenu.firstElementChild)?.focus();
+}
+playerButton.onclick=()=>playerMenu.hidden?openPlayers():closePlayers(true);
+playerMenu.onclick=e=>{
+  const row=e.target.closest('[data-player]');
+  if(!row)return;
+  closePlayers(true);
+  if(source!==row.dataset.player){sourcePicker.value=row.dataset.player;sourcePicker.onchange();}
+};
+playerControl.onkeydown=e=>{
+  if(e.key==='Escape'){closePlayers(true);}
+  else if(e.key==='ArrowDown' || e.key==='ArrowUp'){
+    if(playerMenu.hidden)openPlayers();
+    else{
+      const rows=Array.from(playerMenu.children),i=rows.indexOf(document.activeElement);
+      rows[wrap(i+(e.key==='ArrowDown'?1:-1),rows.length)]?.focus();
+    }
+  }else return;
+  e.preventDefault();e.stopPropagation();
+};
+playerControl.addEventListener('focusout',e=>{if(!playerControl.contains(e.relatedTarget))closePlayers();});
+document.addEventListener('pointerdown',e=>{if(!playerControl.contains(e.target))closePlayers();});
 for (const [id,label] of [['prev',ui.previousTrack],['next',ui.nextTrack]]) {
   $(id).title = label;
   $(id).setAttribute('aria-label',label);
@@ -119,7 +167,7 @@ let pendingPlay=null, playSerial=0, pollPlay=0;
 let driveSoundEnabled=localStorage.getItem('driveSoundEnabled')!=='false';
 let searchSelection=null;
 function follow() {
-  if (searchSelection || $('lookup').classList.contains('open') || pendingPlay || browsingActive || gesture || !$('options').hidden || !playingCard) return;
+  if (searchSelection || $('lookup').classList.contains('open') || pendingPlay || browsingActive || gesture || !$('options').hidden || !playerMenu.hidden || !playingCard) return;
   const target=visible.findIndex(a=>a.id===playingCard.id);
   if(target>=0)rollTo(target,true);
 }
@@ -477,7 +525,7 @@ $('grip').addEventListener('pointerdown',e=>{
 $('grip').onpointermove=e=>{if($('grip').hasPointerCapture(e.pointerId))send('drag');};
 $('grip').onlostpointercapture=()=>send(reducedMotion.matches?'dragEnd:instant':'dragEnd');
 document.addEventListener('keydown',e=>{
-  if(e.target.closest('#lookup,select') || e.isComposing)return;
+  if(e.target.closest('#lookup,#playerControl,select') || e.isComposing)return;
   if(e.key==='ArrowLeft' || e.key==='ArrowRight'){
     if (!e.repeat) $(e.key==='ArrowLeft'?'prev':'next').click();
   }
@@ -490,8 +538,12 @@ document.addEventListener('keydown',e=>{
 });
 window.chrome.webview.addEventListener('message',e=>{
   const x=e.data;
+  if(x.type==='runningPlayers'){updatePlayers(x.players);return;}
   if(x.type==='source'){
     source=x.source;sourcePicker.value=source;
+    playerButton.title=playerMenu.getAttribute('aria-label')+' · '+sourcePicker.selectedOptions[0].text;
+    playerButton.setAttribute('aria-label',playerButton.title);
+    for(const row of playerMenu.children)row.setAttribute('aria-checked',String(row.dataset.player===source));
     document.body.classList.toggle('local-source',source!=='apple');
     $('filter').disabled=source!=='apple';
     endPending();hideSearch();searchSelection=null;all=recentShelves.get(source)||[];media={};transportBusy=false;

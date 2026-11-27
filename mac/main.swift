@@ -23,6 +23,15 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     var origin=NSPoint.zero,anchor=NSPoint.zero
     var idle:DispatchWorkItem?
     var timer:Timer?
+    var lastRunningPlayers:[String]?
+    func refreshRunningPlayers(){
+        let ids=Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
+        var players=LocalPlayer.bundles.compactMap { ids.contains($0.value) ? $0.key : nil }.sorted()
+        if ids.contains("com.apple.Music"){players.insert("apple",at:0)}
+        guard players != lastRunningPlayers else{return}
+        lastRunningPlayers=players
+        post(["type":"runningPlayers","players":players])
+    }
     func tr(_ cn:String,_ english:String)->String {en ? english : cn}
     func applicationDidFinishLaunching(_ note:Notification) {
         let config=WKWebViewConfiguration()
@@ -57,6 +66,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     func webView(_ webView:WKWebView,didFinish navigation:WKNavigation!) {
         ready=true;post(["type":"size","mode":mode]);announceLevel()
         post(["type":"source","source":source])
+        refreshRunningPlayers()
         if smoke {smokeTest();return}
         func connect(){self.reload();self.poll()}
         if source != "apple" {poll()}
@@ -67,7 +77,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             }
         } else {notice(tr("找不到音乐 App。","The Music app could not be found."))}
         timer=Timer.scheduledTimer(withTimeInterval:1.1,repeats:true){[weak self] _ in
-            guard let self else{return};self.poll()
+            guard let self else{return};self.refreshRunningPlayers();self.poll()
             if Date().timeIntervalSince(self.lastRead)>300 {self.reload()}
         }
     }

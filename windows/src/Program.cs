@@ -21,6 +21,31 @@ internal sealed class Shelf : Form
     readonly string baseDir=AppDomain.CurrentDomain.BaseDirectory;
     readonly string profile=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),Edition.Profile);
     readonly bool verify;
+    string lastRunningPlayers;
+    DateTime nextPlayerScan;
+    async Task RefreshRunningPlayers()
+    {
+        if(DateTime.UtcNow<nextPlayerScan)return;
+        nextPlayerScan=DateTime.UtcNow.AddSeconds(4);
+        var players=await Task.Run(()=>{
+            var running=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach(var process in Process.GetProcesses()){
+                using(process){
+                    try{running.Add(process.ProcessName);}
+                    catch(InvalidOperationException){}catch(System.ComponentModel.Win32Exception){}
+                }
+            }
+            var result=new List<string>();
+            if(running.Contains("AppleMusic"))result.Add("apple");
+            if(running.Contains("Spotify"))result.Add("spotify");
+            if(running.Contains("QQMusic"))result.Add("qq");
+            if(running.Contains("KuGou") || running.Contains("KGMusic"))result.Add("kugou");
+            return result;
+        });
+        string key=string.Join(",",players);
+        if(key==lastRunningPlayers)return;
+        lastRunningPlayers=key;Post(new {type="runningPlayers",players});
+    }
     string source;
     int sourceRevision;
     internal static bool ValidSource(string value){return value=="apple" || value=="spotify" || value=="qq" || value=="kugou";}
@@ -215,9 +240,9 @@ internal sealed class Shelf : Form
                 Post(new {type="size",mode=sizeMode});
                 if(!verify)Playback.Changed=QueueMediaUpdate;
                 Post(new {type="source",source});
-                await Reload(true); await PollMedia();
+                await RefreshRunningPlayers(); await Reload(true); await PollMedia();
                 if(verify) { await VerifyUI(); return; }
-                timer.Tick+=async delegate { if(!dragging) { await Reload(false); await PollMedia(); } }; timer.Start();
+                timer.Tick+=async delegate { if(!dragging) { await RefreshRunningPlayers(); await Reload(false); await PollMedia(); } }; timer.Start();
             } catch(Exception ex){ Fail(ex); }
         };
         core.Navigate("https://shelf.local/index.html");

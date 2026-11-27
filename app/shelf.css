@@ -85,5 +85,14 @@ main{width:var(--shelf-width,100vw);margin-inline:auto;overflow:visible;grid-tem
 @media(prefers-reduced-motion:reduce){#repeat,#repeat .repeat-one{transition:none}#repeat:not(:disabled):active{transform:none}}
 #options{max-height:calc(100% - 44px);overflow-y:auto}
 .source-label{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 7px;font-size:11px}
+#playerControl{position:relative;z-index:23}
+#playerButton{width:26px;height:26px;display:grid;place-items:center;padding:4px;border-radius:50%;background:#f1f1f3;color:#535359}
+#playerButton svg{width:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+#playerButton[aria-expanded=true]{background:#e3e3e8}
+#playerMenu{position:absolute;right:0;top:31px;min-width:142px;padding:4px;background:#fffffff7;backdrop-filter:blur(18px);border:1px solid #dedee2;border-radius:12px;box-shadow:0 5px 18px #17171c19;transform-origin:top right;animation:menu-in .14s ease-out}
+#playerMenu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:31px;padding:5px 9px;font-size:12px;text-align:left;border-radius:7px}
+#playerMenu button:hover,#playerMenu button:focus-visible{background:#f1f1f4}
+#playerMenu [aria-checked=true]::after{content:"✓";color:#1673cf}
+@media(prefers-reduced-motion:reduce){#playerMenu{animation:none}}
 #musicSource{max-width:100px;font:inherit;border:0;border-radius:5px;background:#f1f1f3;color:#34343a;padding:4px}
 .local-source #options #lyrics,.local-source #options #switch,.local-source #options #refresh,.local-source #filter span{display:none}
