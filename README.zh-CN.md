@@ -12,8 +12,8 @@
 
 | 系统 | 简体中文 | English |
 | --- | --- | --- |
-| Windows x64 | [下载 Windows 中文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.3/Self-Coverflow-Windows-x64-zh-Setup.exe) | [Windows 英文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.3/Self-Coverflow-Windows-x64-en-Setup.exe) |
-| macOS 13 或更新版本，支持 Apple 芯片及 Intel | [下载 Mac 中文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.3/Self-Coverflow-macOS-universal-zh.pkg) | [Mac 英文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.3/Self-Coverflow-macOS-universal-en.pkg) |
+| Windows x64 | [下载 Windows 中文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.4/Self-Coverflow-Windows-x64-zh-Setup.exe) | [Windows 英文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.4/Self-Coverflow-Windows-x64-en-Setup.exe) |
+| macOS 13 或更新版本，支持 Apple 芯片及 Intel | [下载 Mac 中文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.4/Self-Coverflow-macOS-universal-zh.pkg) | [Mac 英文版](https://github.com/Flapflops3/Self-Coverflow/releases/download/v1.0.0-beta.4/Self-Coverflow-macOS-universal-en.pkg) |
 
 **Windows 10 22H2 / Windows 11（x64）。** 双击下载的 `Setup.exe`。向导会检查 Apple Music 和 WebView2，提供微软商店入口，并在缺少 WebView2 时联网安装微软官方运行时。可选桌面快捷方式、随 Apple Music 启动。完成后在开始菜单找到对应语言的 Self Coverflow。此测试版 Windows 安装程序未签名。
 

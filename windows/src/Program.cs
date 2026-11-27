@@ -261,6 +261,57 @@ internal sealed class Shelf : Form
             else if(confirm)Post(new {type="playbackCheck",playing=state.playing,id=state.albumId});
         } finally {polling=false;}
     }
+    async Task<bool> WaitForTrack(Album album,int index,Func<bool> cancelled)
+    {
+        for(int i=0;i<35 && !cancelled();i++){
+            await Task.Delay(100);
+            var state=await Playback.State(albums,false);
+            if(state.albumId==album.id && state.playing && album.TrackIndex(state.title,state.artist)==index)return true;
+        }
+        return false;
+    }
+    async Task<bool> StepAlbum(Album album,bool unique,MediaState state,int target,Func<bool> cancelled)
+    {
+        int current=album.TrackIndex(state.title,state.artist);
+        if(await Task.Run(()=>MusicClient.AlbumMenuAvailable() && !cancelled() &&
+            MusicClient.PlayTrack(album,unique,album.tracks[target],cancelled))){
+            return await WaitForTrack(album,target,cancelled);
+        }
+        if(cancelled())return false;
+        // Transport buttons operate on the playback queue. Establish an album queue
+        // before using them when playback came from outside the shelf or must wrap.
+        if(albumQueueId!=album.id || Math.Abs(current-target)!=1){
+            if(!await Task.Run(()=>MusicClient.Play(album,unique,cancelled)) ||
+                !await WaitForTrack(album,0,cancelled))return false;
+            current=0;
+        }
+        if(current!=target && state.paused && !cancelled() && !await Playback.Resume())return false;
+        while(current!=target && !cancelled()){
+            bool forward=target>current;
+            double before=forward?-1:await Playback.TrackPosition();
+            if(!await Task.Run(()=>MusicClient.StepPlayer(forward,cancelled)))return false;
+            if(!forward && before>=2){
+                // Music interprets Back as rewind once the song is under way.
+                // Press again only after observing that rewind on the same track.
+                for(int i=0;i<10 && !cancelled();i++){
+                    await Task.Delay(90);
+                    var seen=await Playback.State(albums,false);
+                    if(seen.albumId!=album.id || album.TrackIndex(seen.title,seen.artist)!=current)break;
+                    double position=await Playback.TrackPosition();
+                    if(position>=0 && position<=1){
+                        await Task.Delay(180);
+                        seen=await Playback.State(albums,false);
+                        if(seen.albumId!=album.id || album.TrackIndex(seen.title,seen.artist)!=current)break;
+                        if(!await Task.Run(()=>MusicClient.StepPlayer(false,cancelled)))return false;
+                        break;
+                    }
+                }
+            }
+            current+=forward?1:-1;
+            if(!await WaitForTrack(album,current,cancelled))return false;
+        }
+        return !cancelled();
+    }
     async Task<bool> AlbumTransport(string cmd,int token)
     {
         Func<bool> cancelled=()=>Volatile.Read(ref request)!=token || IsDisposed;
@@ -272,25 +323,22 @@ internal sealed class Shelf : Form
         bool repeat=cmd=="repeatAlbum";
         var target=album.RelativeTrack(state.title,state.artist,repeat?0:cmd=="nextTrack"?1:-1);
         if(target==null)return false;
+        if(!repeat){
+            bool ok=await StepAlbum(album,unique,state,album.tracks.IndexOf(target),cancelled);
+            if(!cancelled())albumQueueId=ok?album.id:null;
+            return ok;
+        }
         // Repeat All acts on the native queue. Opening the row in its album builds that queue
         // even when playback originally came from a playlist or shuffled library.
-        if(!repeat || albumQueueId!=album.id){
-            double position=repeat?await Task.Run(()=>MusicClient.Scrubber()):-1;
+        if(albumQueueId!=album.id){
+            double position=await Task.Run(()=>MusicClient.Scrubber());
             if(cancelled() || !await Task.Run(()=>MusicClient.PlayTrack(album,unique,target,cancelled)))return false;
-            bool confirmed=false;
-            for(int i=0;i<35 && !cancelled();i++){
-                await Task.Delay(100);
-                var next=await Playback.State(albums,false);
-                if(next.albumId==album.id && next.playing && album.TrackIndex(next.title,next.artist)==album.tracks.IndexOf(target)){
-                    confirmed=true;break;
-                }
-            }
-            if(!confirmed || cancelled())return false;
+            if(!await WaitForTrack(album,album.tracks.IndexOf(target),cancelled) || cancelled())return false;
             albumQueueId=album.id;
-            if(repeat && state.paused && !await Playback.PauseForSwitch(cancelled))return false;
-            if(repeat && position>=0 && !cancelled())await Task.Run(()=>MusicClient.Scrubber(position));
+            if(state.paused && !await Playback.PauseForSwitch(cancelled))return false;
+            if(position>=0 && !cancelled())await Task.Run(()=>MusicClient.Scrubber(position));
         }
-        return !repeat || await Task.Run(()=>MusicClient.SetRepeat("album",cancelled));
+        return await Task.Run(()=>MusicClient.SetRepeat("album",cancelled));
     }
 
     async Task Command(string cmd)

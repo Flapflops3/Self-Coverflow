@@ -127,6 +127,21 @@ internal static class MusicClient
         return !cancelled() && Invoke(button);
     }
 
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
+    internal static bool AlbumMenuAvailable(){
+        var root=MainWindow();
+        return root!=null && !IsIconic((IntPtr)root.CurrentNativeWindowHandle);
+    }
+    internal static bool StepPlayer(bool forward,Func<bool> cancelled){
+        string id=forward?"TransportControl_SkipForward":"TransportControl_SkipBack";
+        foreach(var hwnd in PlayerWindows()){
+            var button=Id(Client.ElementFromHandle(hwnd),id);
+            if(cancelled())return false;
+            if(Invoke(button))return true;
+        }
+        return false;
+    }
+
     internal static bool PlayTrack(Album album,bool uniqueTitle,AlbumTrack track,Func<bool> cancelled)
     {
         var root=MainWindow();

@@ -119,6 +119,14 @@ internal static class Playback
         return session!=null && await AsTask<bool>(session.TryPlayAsync());
     }
 
+    internal static async Task<double> TrackPosition()
+    {
+        double position=await Task.Run(()=>MusicClient.Scrubber());
+        if(position>=0)return position;
+        var session=await Session();
+        return session==null?-1:session.GetTimelineProperties().Position.TotalSeconds;
+    }
+
     internal static async Task<bool> PauseForSwitch(Func<bool> cancelled)
     {
         var session=await Session();
