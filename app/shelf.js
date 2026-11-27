@@ -346,7 +346,8 @@ function paintCovers(){
 function step(amount) { if (visible.length>1) select(index + amount); }
 $('prev').onclick = () => albumCommand('previousTrack');
 $('next').onclick = () => albumCommand('nextTrack');
-repeatButton.onclick = () => albumCommand(media.repeatMode === 'album' ? 'repeatOne' : 'repeatAlbum');
+const nextRepeatCommand = {off:'repeatAlbum', album:'repeatOne', one:'repeatOff'};
+repeatButton.onclick = () => albumCommand(nextRepeatCommand[media.repeatMode || 'off']);
 $('transport').onclick = () => {
   if(media.playing){
     if(driveSoundEnabled)driveSound.unlock();
@@ -488,7 +489,10 @@ window.chrome.webview.addEventListener('message',e=>{
     if(pendingPlay && media.playing && (!pendingPlay.id || pendingPlay.id===currentAlbum()?.id))confirmPlayback();
     status();updateList(true,first);}
   else if(x.type==='playbackCheck' && x.playing && pendingPlay && (!pendingPlay.id || pendingPlay.id===(x.id || currentAlbum()?.id)))confirmPlayback();
-  else if(x.type==='albumCommandDone'){transportBusy=false;updateAlbumTransport();if(x.message)notice(x.message);}
+  else if(x.type==='albumCommandDone'){
+    if(x.repeatMode)media.repeatMode=x.repeatMode;
+    transportBusy=false;updateAlbumTransport();if(x.message)notice(x.message);
+  }
   else if(x.type==='playFailed' && x.serial===pendingPlay?.serial)endPending(x.message);
   else if(x.type==='viewport'){
     document.documentElement.style.setProperty('--shelf-width',(x.fraction*100)+'vw');

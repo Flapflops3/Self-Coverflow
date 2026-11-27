@@ -172,7 +172,7 @@ internal sealed class Shelf : Form
             if(desktopParent==IntPtr.Zero)Desktop.SetPinned(Handle,pinned);
             if(preferDock && !pinned && desktopParent==IntPtr.Zero) DockToDesktop();
         }finally{changingMode=false;}
-        if(lyrics!=null)lyrics.SetMode(pinned,desktopParent!=IntPtr.Zero);
+        if(lyrics!=null)lyrics.SetMode(pinned,desktopParent==IntPtr.Zero?this:null);
         Post(new {type="dock",active=desktopParent!=IntPtr.Zero,pinned});
     }
     void Fail(Exception ex)
@@ -319,7 +319,8 @@ internal sealed class Shelf : Form
         var album=albums.FirstOrDefault(a=>a.id==state.albumId);
         if(album==null || cancelled())return false;
         bool unique=albums.Count(a=>String.Equals(a.title,album.title,StringComparison.OrdinalIgnoreCase))==1;
-        if(cmd=="repeatOne")return await Task.Run(()=>MusicClient.SetRepeat("one",cancelled));
+        if(cmd=="repeatOne" || cmd=="repeatOff")
+            return await Task.Run(()=>MusicClient.SetRepeat(cmd=="repeatOne"?"one":"off",cancelled));
         bool repeat=cmd=="repeatAlbum";
         var target=album.RelativeTrack(state.title,state.artist,repeat?0:cmd=="nextTrack"?1:-1);
         if(target==null)return false;
@@ -328,22 +329,22 @@ internal sealed class Shelf : Form
             if(!cancelled())albumQueueId=ok?album.id:null;
             return ok;
         }
-        // Repeat All acts on the native queue. Opening the row in its album builds that queue
-        // even when playback originally came from a playlist or shuffled library.
+        // Repeat All loops the native queue. Establish the album queue at the
+        // current track using the same background path as the navigation buttons.
         if(albumQueueId!=album.id){
-            double position=await Task.Run(()=>MusicClient.Scrubber());
-            if(cancelled() || !await Task.Run(()=>MusicClient.PlayTrack(album,unique,target,cancelled)))return false;
-            if(!await WaitForTrack(album,album.tracks.IndexOf(target),cancelled) || cancelled())return false;
-            albumQueueId=album.id;
+            double position=await Playback.TrackPosition();
+            if(cancelled() || !await StepAlbum(album,unique,state,album.tracks.IndexOf(target),cancelled) || cancelled())return false;
             if(state.paused && !await Playback.PauseForSwitch(cancelled))return false;
             if(position>=0 && !cancelled())await Task.Run(()=>MusicClient.Scrubber(position));
+            if(cancelled())return false;
+            albumQueueId=album.id;
         }
         return await Task.Run(()=>MusicClient.SetRepeat("album",cancelled));
     }
 
     async Task Command(string cmd)
     {
-        if(cmd=="previousTrack" || cmd=="nextTrack" || cmd=="repeatOne" || cmd=="repeatAlbum"){
+        if(cmd=="previousTrack" || cmd=="nextTrack" || cmd=="repeatOne" || cmd=="repeatAlbum" || cmd=="repeatOff"){
             if(verify){Post(new {type="albumCommandDone"});return;}
             int albumToken=++request;
             string message=null;
@@ -374,7 +375,7 @@ internal sealed class Shelf : Form
             if(lyrics==null){
                 lyrics=new LyricsPane(ScreenBounds,scale,cmd=="lyrics:instant");
                 lyrics.FormClosed+=delegate{lyrics=null;};
-                lyrics.SetSong(songTitle);lyrics.Start(pinned,desktopParent!=IntPtr.Zero);
+                lyrics.SetSong(songTitle);lyrics.Start(pinned,desktopParent==IntPtr.Zero?this:null);
             }else{lyrics.ShowRequested();}
             return;
         }

@@ -42,13 +42,13 @@ function run(args) {
         return JSON.stringify({available:true, playing:state==='playing', paused:state==='paused',
             repeatMode:repeatMode(music), title:t.name(), album:t.album(), artist:t.artist(), trackID:String(t.databaseID())});
     }
-    if (['previousTrack','nextTrack','repeatAlbum','repeatOne'].includes(command)) {
+    if (['previousTrack','nextTrack','repeatAlbum','repeatOne','repeatOff'].includes(command)) {
         const ids=JSON.parse(args[1]), current=String(music.currentTrack.databaseID());
         const index=ids.indexOf(current);
         if (index<0) throw Error('The playing album changed.');
         const library=music.libraryPlaylists[0].tracks;
-        if (command==='repeatOne') {
-            music.songRepeat='one';
+        if (command==='repeatOne' || command==='repeatOff') {
+            music.songRepeat=command==='repeatOne' ? 'one' : 'off';
         } else if (command==='repeatAlbum') {
             const name='Self Coverflow · '+music.currentTrack.album()+' ['+ids[0]+']';
             const matches=music.userPlaylists.whose({name:{_equals:name}})();
@@ -72,6 +72,7 @@ function run(args) {
             const tracks=isShelfQueue(music) ? music.currentPlaylist.tracks : library;
             music.play(findTrack(tracks,target));
         }
+        if (command.startsWith('repeat')) return repeatMode(music);
     } else if (command === 'play') {
         const matches=music.libraryPlaylists[0].tracks.whose({databaseID:{_equals:Number(args[1])}})();
         const t=matches[0];

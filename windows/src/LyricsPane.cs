@@ -56,9 +56,9 @@ internal sealed class LyricsPane : Form
         };
     }
     int Px(int value){return (int)Math.Round(value*scale);}
-    internal void Start(bool pinned,bool docked){
+    internal void Start(bool pinned,Form shelfOwner){
         revealStart=DateTime.UtcNow;reveal=reduce?1:.02;SetBoundsFromShelf();
-        Show();SetMode(pinned,docked);ShowRequested();slide.Start();poll.Start();var pending=UpdateText();
+        Show();SetMode(pinned,shelfOwner);ShowRequested();slide.Start();poll.Start();var pending=UpdateText();
     }
     internal void ShowRequested(){
         if(WindowState==FormWindowState.Minimized)WindowState=FormWindowState.Normal;
@@ -69,11 +69,12 @@ internal sealed class LyricsPane : Form
         openToggle=true;
     }
     internal void SetSong(string title){if(song!=title){song=title;seekVersion++;seekTarget=-1;snapshot=pressedSheet=null;tracker=new MusicClient.LyricTracker();lines=new string[0];first=-1;target=scroll=0;measuredWidth=-1;Invalidate();}}
-    internal void SetMode(bool pinned,bool docked){
-        if(shell!=IntPtr.Zero && (!docked || pinned) && Desktop.Detach(Handle))shell=IntPtr.Zero;
+    internal void SetMode(bool pinned,Form shelfOwner){
+        if(shell!=IntPtr.Zero && shelfOwner!=null && Desktop.Detach(Handle))shell=IntPtr.Zero;
         if(shell==IntPtr.Zero){
+            Owner=shelfOwner;
             Desktop.SetPinned(Handle,pinned);
-            if(docked && !pinned)shell=Desktop.Attach(Handle);
+            if(shelfOwner==null)shell=Desktop.Attach(Handle);
         }
         if(attached)SetBoundsFromShelf();
     }

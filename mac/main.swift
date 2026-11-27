@@ -154,13 +154,18 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             if smoke {post(["type":"playbackCheck","playing":true,"id":f[2]]);return}
             run(albumByTrack[lastTrack]==f[2] ? ["resume"] : ["play",f[2]],serial:serial)
         case "resume":if !smoke {run(["resume"],serial:f.count>1 ? Int(f[1]) : nil)}
-        case "previousTrack","nextTrack","repeatOne","repeatAlbum":
+        case "previousTrack","nextTrack","repeatOne","repeatAlbum","repeatOff":
             guard !smoke,let album=albumByTrack[lastTrack],let tracks=tracksByAlbum[album],
                   let bytes=try? JSONEncoder().encode(tracks) else {post(["type":"albumCommandDone"]);return}
             let command=f[0]
             work.async {
                 var reply:[String:Any]=["type":"albumCommandDone"]
-                do {_=try Music.script([command,String(decoding:bytes,as:UTF8.self)])}
+                do {
+                    let result=try Music.script([command,String(decoding:bytes,as:UTF8.self)])
+                    if command.hasPrefix("repeat") {
+                        reply["repeatMode"]=String(decoding:result,as:UTF8.self).trimmingCharacters(in:.whitespacesAndNewlines)
+                    }
+                }
                 catch {reply["message"]=error.localizedDescription}
                 DispatchQueue.main.async {self.poll();self.post(reply)}
             }
