@@ -24,13 +24,27 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     var idle:DispatchWorkItem?
     var timer:Timer?
     var lastRunningPlayers:[String]?
+    var installedPlayers=[String](), nextInstallScan=Date.distantPast
+    var registeredPlayers=[String]()
     func refreshRunningPlayers(){
         let ids=Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
         var players=LocalPlayer.bundles.compactMap { ids.contains($0.value) ? $0.key : nil }.sorted()
         if ids.contains("com.apple.Music"){players.insert("apple",at:0)}
-        guard players != lastRunningPlayers else{return}
+        if Date() >= nextInstallScan {
+            nextInstallScan=Date().addingTimeInterval(30)
+            let bundles=LocalPlayer.bundles.merging(["apple":"com.apple.Music"]) { old,_ in old }
+            registeredPlayers=bundles.compactMap { key,id in
+                guard let url=NSWorkspace.shared.urlForApplication(withBundleIdentifier:id),
+                      FileManager.default.fileExists(atPath:url.path) else{return nil}
+                return key
+            }
+        }
+        let installed=["apple","spotify","qq","kugou"].filter { registeredPlayers.contains($0) || players.contains($0) }
+        guard players != lastRunningPlayers || installed != installedPlayers else{return}
+        installedPlayers=installed
+        if !smoke && !installed.contains(source){ selectSource(players.first ?? installed.first ?? "") }
         lastRunningPlayers=players
-        post(["type":"runningPlayers","players":players])
+        post(["type":"runningPlayers","players":players,"installed":installed])
     }
     func tr(_ cn:String,_ english:String)->String {en ? english : cn}
     func applicationDidFinishLaunching(_ note:Notification) {
@@ -113,7 +127,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         }
     }
     func poll(){
-        guard !polling,!smoke else{return};polling=true
+        guard !polling,!smoke,!source.isEmpty else{return};polling=true
         let selected=source,generation=sourceRevision
         if selected != "apple" {
             work.async {
@@ -164,15 +178,20 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             catch {DispatchQueue.main.async{if let serial {self.post(["type":"playFailed","serial":serial,"message":error.localizedDescription])}else{self.notice(error.localizedDescription)}}}
         }
     }
+    func selectSource(_ value:String){
+        guard source != value else{return}
+        source=value;sourceRevision+=1
+        if !source.isEmpty{defaults.set(source,forKey:"source")}
+        lyrics.panel.orderOut(nil);lyricsTrack="";lastTrack="";lastState=Data();lastRead = .distantPast
+        albumByTrack=[:];tracksByAlbum=[:];resources.allowed=[]
+        post(["type":"source","source":source])
+    }
     func userContentController(_ controller:WKUserContentController,didReceive message:WKScriptMessage) {
         guard message.frameInfo.isMainFrame,message.frameInfo.request.url?.host=="ui",let cmd=message.body as? String else{return}
         let f=cmd.components(separatedBy:":")
         if f[0]=="source" {
-            guard f.count==2, f[1] != source, f[1]=="apple" || LocalPlayer.bundles[f[1]] != nil else{return}
-            source=f[1];sourceRevision+=1;defaults.set(source,forKey:"source")
-            lyrics.panel.orderOut(nil);lyricsTrack="";lastTrack="";lastState=Data();lastRead = .distantPast
-            albumByTrack=[:];tracksByAlbum=[:];resources.allowed=[]
-            post(["type":"source","source":source]);reload();poll();return
+            guard f.count==2, f[1] != source, installedPlayers.contains(f[1]) else{return}
+            selectSource(f[1]);reload();poll();return
         }
         if source != "apple" {
             let command=f[0]

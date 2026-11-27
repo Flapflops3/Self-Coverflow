@@ -8,7 +8,7 @@ Push-Location -LiteralPath $stage
 try {
 $fx = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319'
 $winmd = Join-Path $env:WINDIR 'System32/WinMetadata'
-$refs = @('System.dll','System.Core.dll','System.Web.Extensions.dll','System.Drawing.dll','System.Windows.Forms.dll',
+$refs = @('System.dll','System.Core.dll','Microsoft.CSharp.dll','System.Web.Extensions.dll','System.Drawing.dll','System.Windows.Forms.dll',
     "$fx/System.Runtime.WindowsRuntime.dll","$fx/WPF/UIAutomationClient.dll","$fx/WPF/UIAutomationTypes.dll","$fx/WPF/WindowsBase.dll",
     "$winmd/Windows.Foundation.winmd","$winmd/Windows.Media.winmd","$winmd/Windows.Storage.winmd","$winmd/Windows.System.winmd",'Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll')
 foreach ($assembly in @('System.Runtime','System.Runtime.InteropServices.WindowsRuntime')) {

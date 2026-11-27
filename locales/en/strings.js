@@ -1,4 +1,5 @@
 const ui = Object.freeze({
+  "noPlayers": "No supported player found",
   "localReplay": "Select this album in the music player to play it.",
   "queueRepeat": "Queue repeat · Switch to repeat one",
   "queueOff": "Repeat off · Turn on queue repeat",

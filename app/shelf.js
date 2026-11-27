@@ -5,6 +5,8 @@ const stage = $('stage'), covers = $('covers');
 const nodes = new Map();
 const repeatButton = $('repeat');
 const sourcePicker=$('musicSource');
+const playerOptions=Array.from(sourcePicker.options);
+const playerName=id=>playerOptions.find(option=>option.value===id)?.text || '';
 let source='apple';
 const recentShelves=new Map();
 sourcePicker.onchange=()=>{endPending();send('source:'+sourcePicker.value);};
@@ -15,7 +17,11 @@ function closePlayers(restoreFocus=false) {
   playerButton.setAttribute('aria-expanded','false');
   if(restoreFocus && !playerControl.hidden)playerButton.focus();
 }
-function updatePlayers(running) {
+function updatePlayers(running,installed) {
+  const options=playerOptions.filter(option=>installed.includes(option.value));
+  sourcePicker.replaceChildren(...options);
+  sourcePicker.value=source;
+  sourcePicker.closest('label').hidden=options.length===0;
   const focused=document.activeElement.dataset?.player;
   playerControl.hidden=running.length<2;
   if(playerControl.hidden)closePlayers();
@@ -353,12 +359,12 @@ function draw() {
   const length=visible.length, center=Math.round(cursor), displayed=length?wrap(center,length):0, a=visible[displayed];
   if(!layoutDirty && center===previousCenter){paintCovers();return;}
   layoutDirty=false;previousCenter=center;
-  $('filter').firstChild.textContent = source!=='apple' ? sourcePicker.selectedOptions[0].text : mode === 'favorites' ? ui.favorites : ui.all;
+  $('filter').firstChild.textContent = source!=='apple' ? playerName(source) : mode === 'favorites' ? ui.favorites : ui.all;
   $('switch').textContent = mode === 'favorites' ? ui.showAll : ui.showFavorites;
   $('dock').textContent = docked ? ui.undock : ui.dock;
   $('counter').textContent = length ? String(displayed + 1).padStart(2, '0') + ' / ' + length : '0 / 0';
-  $('album').textContent = a ? a.title : source!=='apple'?ui.waitingPlayer:(mode === 'favorites' ? ui.noFavorites : ui.empty);
-  $('artist').textContent = a ? a.artist || ui.unknown : source!=='apple'?(media.hint || ui.localHint):(mode === 'favorites' ? ui.browseAll : ui.add);
+  $('album').textContent = a ? a.title : !source?ui.noPlayers:source!=='apple'?ui.waitingPlayer:(mode === 'favorites' ? ui.noFavorites : ui.empty);
+  $('artist').textContent = a ? a.artist || ui.unknown : !source?'':source!=='apple'?(media.hint || ui.localHint):(mode === 'favorites' ? ui.browseAll : ui.add);
   $('album').title = $('album').textContent; $('artist').title = $('artist').textContent;
   const keep = new Set();posed=[];
   const left=Math.min(radius,Math.floor((length-1)/2)),right=Math.min(radius,length-1-left);
@@ -538,10 +544,10 @@ document.addEventListener('keydown',e=>{
 });
 window.chrome.webview.addEventListener('message',e=>{
   const x=e.data;
-  if(x.type==='runningPlayers'){updatePlayers(x.players);return;}
+  if(x.type==='runningPlayers'){updatePlayers(x.players,x.installed);return;}
   if(x.type==='source'){
     source=x.source;sourcePicker.value=source;
-    playerButton.title=playerMenu.getAttribute('aria-label')+' · '+sourcePicker.selectedOptions[0].text;
+    playerButton.title=playerMenu.getAttribute('aria-label')+' · '+playerName(source);
     playerButton.setAttribute('aria-label',playerButton.title);
     for(const row of playerMenu.children)row.setAttribute('aria-checked',String(row.dataset.player===source));
     document.body.classList.toggle('local-source',source!=='apple');

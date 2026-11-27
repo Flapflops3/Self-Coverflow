@@ -22,29 +22,49 @@ internal sealed class Shelf : Form
     readonly string profile=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),Edition.Profile);
     readonly bool verify;
     string lastRunningPlayers;
-    DateTime nextPlayerScan;
+    DateTime nextPlayerScan,nextInstallScan;
+    HashSet<string> registeredPlayers=new HashSet<string>();
+    string[] installedPlayers=new string[0];
+    bool scanningPlayers;
     async Task RefreshRunningPlayers()
     {
-        if(DateTime.UtcNow<nextPlayerScan)return;
+        if(scanningPlayers || DateTime.UtcNow<nextPlayerScan)return;
+        scanningPlayers=true;
+        try {
         nextPlayerScan=DateTime.UtcNow.AddSeconds(4);
-        var players=await Task.Run(()=>{
-            var running=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach(var process in Process.GetProcesses()){
-                using(process){
-                    try{running.Add(process.ProcessName);}
-                    catch(InvalidOperationException){}catch(System.ComponentModel.Win32Exception){}
+            var players=await Task.Run(()=>{
+                var running=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach(var process in Process.GetProcesses()){
+                    using(process){
+                        try{running.Add(process.ProcessName);}
+                        catch(InvalidOperationException){}catch(System.ComponentModel.Win32Exception){}
+                    }
                 }
+                var result=new List<string>();
+                if(running.Contains("AppleMusic"))result.Add("apple");
+                if(running.Contains("Spotify"))result.Add("spotify");
+                if(running.Contains("QQMusic"))result.Add("qq");
+                if(running.Contains("KuGou") || running.Contains("KGMusic"))result.Add("kugou");
+                return result;
+            });
+            if(DateTime.UtcNow>=nextInstallScan){
+                nextInstallScan=DateTime.UtcNow.AddSeconds(30);
+                try{registeredPlayers=await Task.Run(()=>InstalledPlayers.Discover());}
+                catch(Exception ex){Debug.WriteLine(ex);nextInstallScan=DateTime.UtcNow.AddSeconds(5);}
             }
-            var result=new List<string>();
-            if(running.Contains("AppleMusic"))result.Add("apple");
-            if(running.Contains("Spotify"))result.Add("spotify");
-            if(running.Contains("QQMusic"))result.Add("qq");
-            if(running.Contains("KuGou") || running.Contains("KGMusic"))result.Add("kugou");
-            return result;
-        });
-        string key=string.Join(",",players);
+            ApplyPlayerInventory(registeredPlayers,players);
+        } finally {scanningPlayers=false;}
+    }
+
+    void ApplyPlayerInventory(HashSet<string> registered,List<string> players)
+    {
+        installedPlayers=new[]{"apple","spotify","qq","kugou"}.Where(p=>registered.Contains(p) || players.Contains(p)).ToArray();
+        string key=string.Join(",",players)+"|"+string.Join(",",installedPlayers);
         if(key==lastRunningPlayers)return;
-        lastRunningPlayers=key;Post(new {type="runningPlayers",players});
+        lastRunningPlayers=key;
+        if(!verify && !installedPlayers.Contains(source))
+            SelectSource(players.FirstOrDefault() ?? installedPlayers.FirstOrDefault() ?? "");
+        Post(new {type="runningPlayers",players,installed=installedPlayers});
     }
     string source;
     int sourceRevision;
@@ -288,7 +308,7 @@ internal sealed class Shelf : Form
     }
     async Task PollMedia(bool confirm=false)
     {
-        if(polling) return; polling=true;
+        if(polling || source.Length==0) return; polling=true;
         int revision=sourceRevision;
         try {
             MediaState state;
@@ -382,16 +402,22 @@ internal sealed class Shelf : Form
         return await Task.Run(()=>MusicClient.SetRepeat("album",cancelled));
     }
 
+    void SelectSource(string value)
+    {
+        if(source==value)return;
+        request++;sourceRevision++;source=value;
+        if(!verify && value.Length>0)File.WriteAllText(Path.Combine(profile,"source.txt"),value);
+        if(lyrics!=null)lyrics.Close();
+        albums=new List<Album>();albumQueueId=null;dbStamp=artStamp=-1;lastMedia="";
+        Post(new {type="source",source});
+    }
+
     async Task Command(string cmd)
     {
         if(cmd.StartsWith("source:",StringComparison.Ordinal)){
             var value=cmd.Substring(7);
-            if(!ValidSource(value) || value==source)return;
-            request++;sourceRevision++;source=value;
-            if(!verify)File.WriteAllText(Path.Combine(profile,"source.txt"),value);
-            if(lyrics!=null)lyrics.Close();
-            albums=new List<Album>();albumQueueId=null;dbStamp=artStamp=-1;lastMedia="";
-            Post(new {type="source",source});
+            if(!installedPlayers.Contains(value) || value==source)return;
+            SelectSource(value);
             await Reload(true);await PollMedia();
             return;
         }

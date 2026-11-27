@@ -1,4 +1,5 @@
 const ui = Object.freeze({
+  "noPlayers": "未检测到支持的播放器",
   "localReplay": "请在音乐软件中选择这张专辑播放。",
   "queueRepeat": "队列循环 · 切换为单曲循环",
   "queueOff": "不循环 · 开启队列循环",

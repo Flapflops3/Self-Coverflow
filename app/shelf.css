@@ -84,6 +84,7 @@ main{width:var(--shelf-width,100vw);margin-inline:auto;overflow:visible;grid-tem
 #repeat[data-mode=one] .repeat-one{opacity:1;transform:scale(1)}
 @media(prefers-reduced-motion:reduce){#repeat,#repeat .repeat-one{transition:none}#repeat:not(:disabled):active{transform:none}}
 #options{max-height:calc(100% - 44px);overflow-y:auto}
+.source-label[hidden]{display:none}
 .source-label{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 7px;font-size:11px}
 #playerControl{position:relative;z-index:23}
 #playerButton{width:26px;height:26px;display:grid;place-items:center;padding:4px;border-radius:50%;background:#f1f1f3;color:#535359}
