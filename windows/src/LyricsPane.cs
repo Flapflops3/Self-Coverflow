@@ -26,7 +26,6 @@ internal sealed class LyricsPane : Form
     Point dragPointer,dragOrigin,free;
     bool moving,fetching,openToggle=true,attached=true,reduce;
     readonly MusicClient.LyricsAccess access=new MusicClient.LyricsAccess();
-    IntPtr shell;
     double reveal;
     DateTime revealStart,manualUntil;
     protected override bool ShowWithoutActivation {get{return true;}}
@@ -70,12 +69,8 @@ internal sealed class LyricsPane : Form
     }
     internal void SetSong(string title){if(song!=title){song=title;seekVersion++;seekTarget=-1;snapshot=pressedSheet=null;tracker=new MusicClient.LyricTracker();lines=new string[0];first=-1;target=scroll=0;measuredWidth=-1;Invalidate();}}
     internal void SetMode(bool pinned,Form shelfOwner){
-        if(shell!=IntPtr.Zero && shelfOwner!=null && Desktop.Detach(Handle))shell=IntPtr.Zero;
-        if(shell==IntPtr.Zero){
-            Owner=shelfOwner;
-            Desktop.SetPinned(Handle,pinned);
-            if(shelfOwner==null)shell=Desktop.Attach(Handle);
-        }
+        Owner=shelfOwner;
+        Desktop.SetPinned(Handle,pinned);
         if(attached)SetBoundsFromShelf();
     }
     Rectangle At(string side,Rectangle shelf)
@@ -105,7 +100,7 @@ internal sealed class LyricsPane : Form
         int h=Math.Max(1,(int)(rect.Height*reveal));
         if(edge=="top")rect.Y+=rect.Height-h;
         rect.Height=h;
-        if(IsHandleCreated)Desktop.Place(Handle,shell,rect);else Bounds=rect;
+        if(IsHandleCreated)Desktop.Place(Handle,rect);else Bounds=rect;
     }
     void CloseSource(){try{access.Close();}catch(InvalidOperationException){}catch(System.Runtime.InteropServices.COMException){}}
     async Task UpdateText(){
@@ -207,7 +202,7 @@ internal sealed class LyricsPane : Form
             if(distance<best){edge=side;alignment=ratio;best=distance;attached=true;}
         }
         if(attached){var aim=At(edge,shelf);double pull=.85*Math.Pow(1-best/Px(52),2);rect.Offset((int)((aim.X-rect.X)*pull),(int)((aim.Y-rect.Y)*pull));}
-        Desktop.Place(Handle,shell,rect);
+        Desktop.Place(Handle,rect);
     }
     protected override async void OnMouseUp(MouseEventArgs e){
         base.OnMouseUp(e);

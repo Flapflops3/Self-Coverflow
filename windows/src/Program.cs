@@ -76,11 +76,9 @@ internal sealed class Shelf : Form
         return "apple";
     }
     List<Album> albums=new List<Album>();
-    IntPtr desktopParent=IntPtr.Zero;
-    bool preferDock=true,reading,polling,ready,dragging;
+    bool reading,polling,ready,dragging;
     bool pinned;
     LyricsPane lyrics;
-    bool changingMode;
     string songTitle="";
     readonly int snapDistance;
     readonly double scale;
@@ -101,7 +99,7 @@ internal sealed class Shelf : Form
     Point dragCursor,dragOrigin;
     long dbStamp=-1,artStamp=-1;
     string lastMedia="";
-    protected override bool ShowWithoutActivation { get { return preferDock; } }
+    protected override bool ShowWithoutActivation { get { return true; } }
     public Shelf(bool verifyUI)
     {
         verify=verifyUI;
@@ -127,7 +125,6 @@ internal sealed class Shelf : Form
                 pt.Offset(origin.X-oldX,origin.Y-oldY);
             }
             if(savedScreen!=null || Screen.AllScreens.Any(s=>s.WorkingArea.Contains(new Point(pt.X+Width/2,pt.Y+35)))) Location=pt;
-            preferDock=parts[2]=="desktop";
             pinned=parts.Length>3 && parts[3]=="pinned";
             sizeMode=parts.Length>4 && (parts[4]=="half" || parts[4]=="wide") ? parts[4] : "classic";
             anchorX=Left+Width/2;
@@ -156,7 +153,7 @@ internal sealed class Shelf : Form
         if(verify || WindowState==FormWindowState.Minimized) return;
         try {
             var bounds=ScreenBounds();var pos=bounds.Location;var monitor=Screen.FromRectangle(bounds);
-            File.WriteAllLines(Path.Combine(profile,"window.txt"),new[]{pos.X.ToString(),pos.Y.ToString(),preferDock?"desktop":"window",pinned?"pinned":"normal",sizeMode,anchorX.ToString(),monitor.DeviceName,monitor.WorkingArea.X.ToString(),monitor.WorkingArea.Y.ToString()});
+            File.WriteAllLines(Path.Combine(profile,"window.txt"),new[]{pos.X.ToString(),pos.Y.ToString(),"window",pinned?"pinned":"normal",sizeMode,anchorX.ToString(),monitor.DeviceName,monitor.WorkingArea.X.ToString(),monitor.WorkingArea.Y.ToString()});
         } catch(IOException) {}
     }
     void RoundCorners()
@@ -187,7 +184,7 @@ internal sealed class Shelf : Form
     protected override void WndProc(ref Message message)
     {
         base.WndProc(ref message);
-        if(message.Msg==0x47 && !changingMode && lyrics!=null && !lyrics.IsDisposed)lyrics.SetBoundsFromShelf();
+        if(message.Msg==0x47 && lyrics!=null && !lyrics.IsDisposed)lyrics.SetBoundsFromShelf();
         if(verificationScreen!=null && (message.Msg==0x47 || message.Msg==0x18) && Desktop.IsWindowVisible(message.HWnd)){
             visiblePositions++;
             if(!verificationScreen.Bounds.Contains(Desktop.Bounds(message.HWnd)))positionsOutsideMonitor++;
@@ -196,7 +193,7 @@ internal sealed class Shelf : Form
     void AnimateWindow(Rectangle target,int duration,bool release)
     {
         windowTimer.Stop();motionStart=ScreenBounds();motionEnd=target;motionDuration=duration;settling=release;
-        if(duration==0 || motionStart==target){Desktop.Place(Handle,desktopParent,target);SavePosition();return;}
+        if(duration==0 || motionStart==target){Desktop.Place(Handle,target);SavePosition();return;}
         windowClock.Restart();windowTimer.Start();
     }
     void TickWindow()
@@ -205,7 +202,7 @@ internal sealed class Shelf : Form
         double mix=settling?1-Math.Pow(1-t,3):t*t*(3-2*t);
         Func<int,int,int> blend=(a,b)=>a+(int)Math.Round((b-a)*mix);
         var next=new Rectangle(blend(motionStart.X,motionEnd.X),blend(motionStart.Y,motionEnd.Y),blend(motionStart.Width,motionEnd.Width),motionEnd.Height);
-        Desktop.Place(Handle,desktopParent,next);
+        Desktop.Place(Handle,next);
         if(t>=1){windowTimer.Stop();SavePosition();}
     }
     void ChangeWidth(string mode,bool instant)
@@ -219,16 +216,9 @@ internal sealed class Shelf : Form
     }
     void SetDisplayMode()
     {
-        changingMode=true;
-        try{
-            if(desktopParent!=IntPtr.Zero && (pinned || !preferDock)) {
-                if(Desktop.Detach(Handle))desktopParent=IntPtr.Zero;
-            }
-            if(desktopParent==IntPtr.Zero)Desktop.SetPinned(Handle,pinned);
-            if(preferDock && !pinned && desktopParent==IntPtr.Zero) DockToDesktop();
-        }finally{changingMode=false;}
-        if(lyrics!=null)lyrics.SetMode(pinned,desktopParent==IntPtr.Zero?this:null);
-        Post(new {type="dock",active=desktopParent!=IntPtr.Zero,pinned});
+        Desktop.SetPinned(Handle,pinned);
+        if(lyrics!=null)lyrics.SetMode(pinned,this);
+        Post(new {type="pin",pinned});
     }
     void Fail(Exception ex)
     {
@@ -269,9 +259,6 @@ internal sealed class Shelf : Form
     }
     void Post(object data) { if(ready && !IsDisposed && !Disposing) view.CoreWebView2.PostWebMessageAsJson(json.Serialize(data)); }
     void Notice(string message) { Post(new {type="notice",message}); }
-    void DockToDesktop() {
-        desktopParent=Desktop.Attach(Handle);
-    }
     void MoveWithSnap(Point raw,Rectangle area)
     {
         int gx,gy,w=ModeWidth(area);
@@ -280,7 +267,7 @@ internal sealed class Shelf : Form
         if(sizeMode=="wide")x=gx=area.Left;
         landing=new Point(gx,Math.Max(area.Top,Math.Min(area.Bottom-Height,gy)));
         if(sizeMode!="wide")anchorX=gx+w/2;
-        Desktop.Place(Handle,desktopParent,new Rectangle(x,y,w,Height));
+        Desktop.Place(Handle,new Rectangle(x,y,w,Height));
     }
     async Task Reload(bool force)
     {
@@ -472,7 +459,7 @@ internal sealed class Shelf : Form
             if(lyrics==null){
                 lyrics=new LyricsPane(ScreenBounds,scale,cmd=="lyrics:instant");
                 lyrics.FormClosed+=delegate{lyrics=null;};
-                lyrics.SetSong(songTitle);lyrics.Start(pinned,desktopParent==IntPtr.Zero?this:null);
+                lyrics.SetSong(songTitle);lyrics.Start(pinned,this);
             }else{lyrics.ShowRequested();}
             return;
         }
@@ -482,7 +469,6 @@ internal sealed class Shelf : Form
         }
         if(cmd=="reload"){await Reload(true);return;}
         if(cmd=="pin"){pinned=!pinned;SetDisplayMode();SavePosition();return;}
-        if(cmd=="dock"){preferDock=desktopParent==IntPtr.Zero;pinned=false;SetDisplayMode();SavePosition();return;}
         if(cmd=="dragStart"){
             if(windowTimer.Enabled && !settling) return;
             windowTimer.Stop();dragging=true;dragCursor=Cursor.Position;dragOrigin=landing=ScreenBounds().Location;return;
@@ -592,9 +578,10 @@ internal sealed class Shelf : Form
         await core.ExecuteScriptAsync("const avail=media.available;media.available=false;$('transport').click();media.available=true;$('transport').click();media.available=avail");
         await core.ExecuteScriptAsync("document.getElementById('pin').click()");
         await Task.Delay(180);
-        bool onTop=desktopParent==IntPtr.Zero && Desktop.IsTopmost(Handle);
+        bool onTop=Desktop.IsTopmost(Handle);
         await core.ExecuteScriptAsync("document.getElementById('pin').click()");
         await Task.Delay(180);
+        bool unpinned=!Desktop.IsTopmost(Handle);
         var origin=ScreenBounds().Location;var area=Screen.FromPoint(origin).WorkingArea;
         int fixedHeight=Height,classicWidth=Width,surfaceWidth=view.Width;
         await core.ExecuteScriptAsync("document.querySelector('[data-size=wide]').click()");
@@ -624,7 +611,7 @@ internal sealed class Shelf : Form
         AnimateWindow(new Rectangle(landing,Size),167,true);
         await Task.Delay(240);
         bool top=ScreenBounds().Location.Y==area.Top;
-        Desktop.Move(Handle,desktopParent,origin);
+        Desktop.Move(Handle,origin);
         bool transport=verifiedToggles==2 && verifiedOpens==0;
         bool reduced=await core.ExecuteScriptAsync("reducedMotion.matches")=="true";
         string clicks=await core.ExecuteScriptAsync("(()=>{const c=posed.find(p=>all.some(a=>a.id===p.card.dataset.id))?.card;if(!c)return false;c.click();c.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));return true})()");
@@ -668,10 +655,10 @@ internal sealed class Shelf : Form
         bool sharedUnpin=paneOpened && !lyrics.IsPinned && lyrics.Coupled;
         if(lyrics!=null)lyrics.Close();
         bool search=await VerifySearch();
-        var checks=new {stableSurface,cancelledPull,upCenter,upSide,search,isolatedPull,pullCentered,waiting,confirmed,doubleClick,paneOpened,sharedPin,sharedUnpin,gallery=json.DeserializeObject(result),monitor=verificationScreen.DeviceName,visiblePositions,positionsOutsideMonitor,held,rolling,returned,interrupted,followed=json.DeserializeObject(followed),onTop,restored=desktopParent!=IntPtr.Zero,centered,atEdge,released,softTop,top,widening,wide,half,classic,transport};
+        var checks=new {stableSurface,cancelledPull,upCenter,upSide,search,isolatedPull,pullCentered,waiting,confirmed,doubleClick,paneOpened,sharedPin,sharedUnpin,gallery=json.DeserializeObject(result),monitor=verificationScreen.DeviceName,visiblePositions,positionsOutsideMonitor,held,rolling,returned,interrupted,followed=json.DeserializeObject(followed),onTop,unpinned,centered,atEdge,released,softTop,top,widening,wide,half,classic,transport};
         File.WriteAllText(Path.Combine(profile,"ui-check.json"),json.Serialize(checks));
         using(var fs=File.Create(Path.Combine(profile,"preview.png"))) await core.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png,fs);
-        if(!isolatedPull || !pullCentered || !waiting || !confirmed || !doubleClick || !paneOpened || !sharedPin || !sharedUnpin || positionsOutsideMonitor!=0 || visiblePositions==0 || !result.Contains("\"passed\":true") || desktopParent==IntPtr.Zero || !held || !rolling || !returned || !interrupted || !onTop || !centered || !atEdge || !released || !softTop || !top || !(widening||reduced) || !wide || !half || !classic || !transport) Environment.ExitCode=2;
+        if(!isolatedPull || !pullCentered || !waiting || !confirmed || !doubleClick || !paneOpened || !sharedPin || !sharedUnpin || positionsOutsideMonitor!=0 || visiblePositions==0 || !result.Contains("\"passed\":true") || !unpinned || !held || !rolling || !returned || !interrupted || !onTop || !centered || !atEdge || !released || !softTop || !top || !(widening||reduced) || !wide || !half || !classic || !transport) Environment.ExitCode=2;
         if(!search || !stableSurface || !cancelledPull || !upCenter || !upSide)Environment.ExitCode=2;
         Close();
     }

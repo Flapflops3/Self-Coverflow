@@ -16,7 +16,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     var web:WKWebView!
     var lyrics:LyricPanel!
     var ready=false,reading=false,polling=false,attachedLyrics=true
-    var pinned=false,docked=false,mode="classic",revision=0
+    var pinned=false,mode="classic",revision=0
     var lastTrack="",lyricsTrack="",lastState=Data(),lastRead=Date.distantPast
     var source="apple",sourceRevision=0
     var albumByTrack=[String:String](), tracksByAlbum=[String:[String]]()
@@ -64,7 +64,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             if let saved=defaults.string(forKey:"source"),LocalPlayer.bundles[saved] != nil {source=saved}
             _=window.setFrameUsingName("CoverShelf")
             if !NSScreen.screens.contains(where:{$0.visibleFrame.intersects(window.frame)}) {window.center()}
-            pinned=defaults.bool(forKey:"pin");docked=defaults.bool(forKey:"desktop")
+            pinned=defaults.bool(forKey:"pin")
             mode=defaults.string(forKey:"mode") ?? "classic"
         }
         applyLevel();resize(mode,animated:false)
@@ -220,7 +220,6 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             idle=job;DispatchQueue.main.asyncAfter(deadline:.now()+2.5,execute:job)
         case "size":if f.count>1 {resize(f[1],animated:!f.contains("instant"))}
         case "pin":pinned.toggle();defaults.set(pinned,forKey:"pin");applyLevel();announceLevel()
-        case "dock":docked.toggle();pinned=false;defaults.set(false,forKey:"pin");defaults.set(docked,forKey:"desktop");applyLevel();announceLevel()
         case "dragStart":origin=window.frame.origin;anchor=NSEvent.mouseLocation
         case "drag":let p=NSEvent.mouseLocation;window.setFrameOrigin(NSPoint(x:origin.x+p.x-anchor.x,y:origin.y+p.y-anchor.y))
         case "dragEnd":snap(animated:!f.contains("instant"))
@@ -253,9 +252,9 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         default:break
         }
     }
-    func announceLevel(){post(["type":"dock","active":docked && !pinned,"pinned":pinned])}
+    func announceLevel(){post(["type":"pin","pinned":pinned])}
     func applyLevel(){
-        window.level=pinned ? .floating : (docked ? NSWindow.Level(rawValue:Int(CGWindowLevelForKey(.desktopWindow))+1) : .normal)
+        window.level=pinned ? .floating : .normal
         window.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary]
         lyrics?.panel.level=window.level
     }

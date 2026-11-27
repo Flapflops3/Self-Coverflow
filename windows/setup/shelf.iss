@@ -12,7 +12,7 @@
 [Setup]
 AppId=io.github.flapflops3.selfcoverflow.{#Edition}
 AppName=Self Coverflow
-AppVersion=1.0.0-beta.6-preview.1
+AppVersion=1.0.0-beta.6-preview.2
 VersionInfoVersion=1.0.0.6
 AppVerName=Self Coverflow 1.0 Beta 6 Preview · {#EditionName}
 AppPublisher=Flapflops3

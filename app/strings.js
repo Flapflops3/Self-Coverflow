@@ -23,8 +23,6 @@ const ui = Object.freeze({
   "all": "全部专辑 ",
   "showAll": "显示全部专辑",
   "showFavorites": "只看收藏专辑",
-  "undock": "切换为独立窗口",
-  "dock": "贴在桌面",
   "noFavorites": "还没有收藏专辑",
   "empty": "资料库里还没有专辑",
   "unknown": "未知艺人",

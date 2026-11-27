@@ -88,7 +88,7 @@ function albumCommand(command) {
 }
 let all = [], visible = [], index = 0;
 let mode = localStorage.getItem('scope') || 'favorites';
-let docked = false, media = {}, noticeTimer, suppressClick = false;
+let media = {}, noticeTimer, suppressClick = false;
 let playingCard = null, browseSequence = 0, browsingActive = false, gesture = false;
 let browseFlush = 0;
 const wrap = (n, count) => ((n % count) + count) % count;
@@ -361,7 +361,6 @@ function draw() {
   layoutDirty=false;previousCenter=center;
   $('filter').firstChild.textContent = source!=='apple' ? playerName(source) : mode === 'favorites' ? ui.favorites : ui.all;
   $('switch').textContent = mode === 'favorites' ? ui.showAll : ui.showFavorites;
-  $('dock').textContent = docked ? ui.undock : ui.dock;
   $('counter').textContent = length ? String(displayed + 1).padStart(2, '0') + ' / ' + length : '0 / 0';
   $('album').textContent = a ? a.title : !source?ui.noPlayers:source!=='apple'?ui.waitingPlayer:(mode === 'favorites' ? ui.noFavorites : ui.empty);
   $('artist').textContent = a ? a.artist || ui.unknown : !source?'':source!=='apple'?(media.hint || ui.localHint):(mode === 'favorites' ? ui.browseAll : ui.add);
@@ -444,7 +443,6 @@ for(const button of document.querySelectorAll('[data-size]'))button.onclick=()=>
 $('lyrics').onclick=()=>{$('options').hidden=true;send(reducedMotion.matches?'lyrics:instant':'lyrics');};
 $('close').onclick = () => send('close');
 $('refresh').onclick = () => { $('options').hidden = true; browsing(); send('reload'); };
-$('dock').onclick = () => { $('options').hidden = true; browsing(); send('dock'); };
 document.addEventListener('pointerdown',e => {if (!$('options').hidden && !e.target.closest('#options,#menu')) { $('options').hidden=true; browsing(); }});
 function scroll(e) {
   e.preventDefault();
@@ -593,8 +591,7 @@ window.chrome.webview.addEventListener('message',e=>{
   }
   else if(x.type==='idle' && x.sequence===browseSequence){browsingActive=false;follow();}
   else if(x.type==='notice')notice(x.message);
-  else if(x.type==='dock'){
-    docked=x.active;$('dock').textContent=docked?ui.undock:ui.dock;
+  else if(x.type==='pin'){
     $('pin').setAttribute('aria-pressed',String(!!x.pinned));$('pin').title=x.pinned?ui.unpin:ui.pin;
   }
 });
@@ -611,6 +608,6 @@ window.shelfCheck=()=>{
   step(-1); const returned=index===before;
   toggleFilter();const switched=scope!==mode;toggleFilter();
   return {passed:advanced&&returned&&switched&&images>0,total:all.length,favorites:all.filter(a=>a.favorite).length,
-    cached:all.filter(a=>a.cover).length,visibleImages:images,desktop:docked,selected:visible[index]?.title};
+    cached:all.filter(a=>a.cover).length,visibleImages:images,selected:visible[index]?.title};
 };
 

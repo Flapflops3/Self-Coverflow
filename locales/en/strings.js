@@ -23,8 +23,6 @@ const ui = Object.freeze({
   "all": "All Albums ",
   "showAll": "Show all albums",
   "showFavorites": "Show favorites",
-  "undock": "Detach from desktop",
-  "dock": "Attach to desktop",
   "noFavorites": "No favorite albums yet",
   "empty": "Your library is empty",
   "unknown": "Unknown artist",
