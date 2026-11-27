@@ -72,7 +72,16 @@ internal static class AppLaunch
             using (var self = Process.GetCurrentProcess()) session = self.SessionId;
             int previous = 0;
             while (true) {
-                int current = MusicWindowProcess(session);
+                string source=Shelf.SavedSource();
+                int current=0;
+                if(source=="apple")current=MusicWindowProcess(session);
+                else {
+                    string name=source=="qq"?"QQMusic":source=="kugou"?"KuGou":"Spotify";
+                    foreach(var app in Process.GetProcessesByName(name))using(app){
+                        try{if(app.SessionId==session && app.MainWindowHandle!=IntPtr.Zero){current=app.Id;break;}}
+                        catch(InvalidOperationException){}
+                    }
+                }
                 if (current != 0 && current != previous) {
                     Mutex widget;
                     if (Mutex.TryOpenExisting(@"Local\CoverShelfWidget", out widget) ||

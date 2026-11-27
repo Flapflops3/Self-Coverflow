@@ -6,7 +6,13 @@ A white **Cover Flow desktop widget for Apple Music** on Windows and macOS. Flip
 
 ![English Self Coverflow showing nine demo album jackets with Tidal Forms centered](docs/images/shelf-en.png)
 
-## Download
+## Local music sources (test branch)
+
+Open **More → Music source** and choose Apple Music, QQ Music, KuGou Music or Spotify. For the three new sources, play a track in the desktop app first. The shelf follows the current album and keeps up to 16 album covers per source in memory for this session. The transport buttons control that player’s queue when it exposes the corresponding commands. Personal cloud libraries, starting a previously heard album and synchronized lyrics are available only through the Apple Music integration in this build.
+
+Windows uses the player's system media controls. If KuGou is missing, enable system playback controls in KuGou settings. On Mac, make the selected player the system Now Playing app. The universal installer includes mediaremote-adapter 0.9.0. Neither platform needs a developer ID for local playback.
+
+## Download (stable Beta 5)
 
 Choose your system and language. English and Simplified Chinese are separate applications.
 

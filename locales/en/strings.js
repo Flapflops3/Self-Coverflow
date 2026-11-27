@@ -1,4 +1,11 @@
 const ui = Object.freeze({
+  "localReplay": "Select this album in the music player to play it.",
+  "queueRepeat": "Queue repeat · Switch to repeat one",
+  "queueOff": "Repeat off · Turn on queue repeat",
+  "localHint": "Play a song in the selected player",
+  "waitingPlayer": "Waiting for player",
+  "localPause": "Pause",
+  "localResume": "Resume",
   "previousTrack": "Previous track",
   "nextTrack": "Next track",
   "repeatAlbum": "Album repeat · Switch to repeat one",

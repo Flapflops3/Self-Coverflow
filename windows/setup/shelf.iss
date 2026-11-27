@@ -12,9 +12,9 @@
 [Setup]
 AppId=io.github.flapflops3.selfcoverflow.{#Edition}
 AppName=Self Coverflow
-AppVersion=1.0.0-beta.5
-VersionInfoVersion=1.0.0.5
-AppVerName=Self Coverflow 1.0 Beta 5 · {#EditionName}
+AppVersion=1.0.0-beta.6-preview.1
+VersionInfoVersion=1.0.0.6
+AppVerName=Self Coverflow 1.0 Beta 6 Preview · {#EditionName}
 AppPublisher=Flapflops3
 AppPublisherURL=https://github.com/Flapflops3/Self-Coverflow
 AppSupportURL=https://github.com/Flapflops3/Self-Coverflow/issues
@@ -50,14 +50,14 @@ Name: "zh"; MessagesFile: "ChineseSimplified.isl"
 [Messages]
 #if Edition == "en"
 WelcomeLabel1=Self Coverflow
-WelcomeLabel2=Your Apple Music albums, on your desktop.%n%nThis guided setup checks the playback components and installs the English edition for your Windows account.
+WelcomeLabel2=Your music, on your desktop.%n%nThis guided setup checks the playback components and installs the English edition for your Windows account.
 FinishedHeadingLabel=Your shelf is ready
-FinishedLabel=Open Apple Music, sign in and let your library sync. Launch Self Coverflow, select All Albums and double-click a cover. The song title appears when Music starts playing.
+FinishedLabel=Choose a desktop player under More → Music source, then play a song in that player.
 #else
 WelcomeLabel1=Self Coverflow
-WelcomeLabel2=把 Apple Music 的唱片放在桌面上。%n%n向导会检查播放所需的组件，为当前 Windows 用户安装简体中文版。
+WelcomeLabel2=把唱片放在桌面上。%n%n向导会检查播放所需的组件，为当前 Windows 用户安装简体中文版。
 FinishedHeadingLabel=唱片架已就绪
-FinishedLabel=打开 Apple Music，登录并等待资料库同步。启动 Self Coverflow，切换到「全部专辑」，双击一张封面。开始播放后，底部会显示曲名。
+FinishedLabel=在「更多 → 音乐来源」中选择桌面播放器，然后在播放器里播放一首歌。
 #endif
 
 [Tasks]
@@ -91,7 +91,7 @@ begin
 end;
 
 function FollowLabel(Param: String): String;
-begin Result:=L('Follow Apple Music after Windows sign-in (choose one language edition)','登录 Windows 后随 Apple Music 启动（只需选择一个语言版本）'); end;
+begin Result:=L('Follow the selected music player after Windows sign-in (choose one language edition)','登录 Windows 后随所选播放器启动（只需选择一个语言版本）'); end;
 function LaunchLabel(Param: String): String;
 begin Result:=L('Open Self Coverflow','打开 Self Coverflow'); end;
 
@@ -116,7 +116,7 @@ begin
   if HasRuntime then RuntimeText.Caption:=L('WebView2 Runtime is installed.','WebView2 运行时已安装。')
   else RuntimeText.Caption:=L('Setup will install the Microsoft WebView2 Runtime. An internet connection is required.','向导将联网安装 Microsoft WebView2 运行时。');
   if HasMusic then MusicText.Caption:=L('Apple Music is installed. Make sure Library → Albums contains your music.','检测到 Apple Music。请确认「资料库 → 专辑」中能看到自己的唱片。')
-  else MusicText.Caption:=L('Install Apple Music from the Store and sign in before using the shelf.','请先从微软商店安装 Apple Music，再登录并同步资料库。');
+  else MusicText.Caption:=L('Apple Music is optional. Choose another player in More → Music source.','Apple Music 为可选组件，可在「更多 → 音乐来源」中选其他播放器。');
 end;
 procedure OpenStore(Sender:TObject);
 var code:Integer;

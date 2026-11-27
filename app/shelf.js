@@ -4,6 +4,10 @@ const send = value => window.chrome.webview.postMessage(value);
 const stage = $('stage'), covers = $('covers');
 const nodes = new Map();
 const repeatButton = $('repeat');
+const sourcePicker=$('musicSource');
+let source='apple';
+const recentShelves=new Map();
+sourcePicker.onchange=()=>{endPending();send('source:'+sourcePicker.value);};
 for (const [id,label] of [['prev',ui.previousTrack],['next',ui.nextTrack]]) {
   $(id).title = label;
   $(id).setAttribute('aria-label',label);
@@ -14,12 +18,14 @@ repeatButton.disabled = true;
 let transportBusy = false;
 function updateAlbumTransport() {
   const mode = media.repeatMode || 'off';
-  const label = mode === 'one' ? ui.repeatOne : mode === 'album' ? ui.repeatAlbum : ui.repeatOff;
+  const queue=source!=='apple';
+  const label = mode === 'one' ? ui.repeatOne : mode === 'album' ? (queue?ui.queueRepeat:ui.repeatAlbum) : (queue?ui.queueOff:ui.repeatOff);
   repeatButton.dataset.mode = mode;
   repeatButton.title = label;
   repeatButton.setAttribute('aria-label',label);
   repeatButton.disabled = transportBusy || !media.canRepeat || !!pendingPlay;
-  $('prev').disabled = $('next').disabled = transportBusy || !media.canStep || !!pendingPlay;
+  $('prev').disabled = transportBusy || !(media.canPrevious ?? media.canStep) || !!pendingPlay;
+  $('next').disabled = transportBusy || !(media.canNext ?? media.canStep) || !!pendingPlay;
 }
 function albumCommand(command) {
   transportBusy = true;
@@ -100,6 +106,10 @@ function rollTo(target,following) {
 
 function currentAlbum() {
   if (!media.available || !media.title) return null;
+  if(source!=='apple'){
+    const title=media.album || media.title,artist=media.albumArtist || media.artist || '';
+    return {id:JSON.stringify([source,title,artist]),title,artist,temporary:true};
+  }
   return all.find(a => a.id === media.albumId) || {
     id:'now/' + JSON.stringify([media.album || media.title,media.album ? '' : media.artist]),
     title:media.album || media.title, artist:media.artist, temporary:true
@@ -131,8 +141,10 @@ function status() {
   $('status').classList.toggle('pending',!!pendingPlay);
   $('status').textContent = pendingPlay ? ui.starting+(pendingPlay.title?' · '+pendingPlay.title:'') : media.title ? (media.playing ? ui.playing : ui.paused) + ' · ' + media.title : '';
   $('transport').classList.toggle('playing',Boolean(media.playing));
-  $('transport').setAttribute('aria-label',media.playing?ui.pause:ui.play);
-  $('transport').title = media.playing ? ui.pause : ui.resume;
+  const local=source!=='apple';
+  $('transport').disabled=local && !(media.playing?media.canPause:media.canPlay);
+  $('transport').setAttribute('aria-label',local?(media.playing?ui.localPause:ui.localResume):(media.playing?ui.pause:ui.play));
+  $('transport').title = local?(media.playing?ui.localPause:ui.localResume):(media.playing?ui.pause:ui.resume);
 }
 function endPending(error) {
   if(!pendingPlay)return;
@@ -162,7 +174,7 @@ function updateList(preserve,initialFocus=false) {
   layoutDirty=true;
   const old=visible;
   const previous = preserve && visible[index] ? visible[index].id : localStorage.getItem('selected-' + mode);
-  visible = all.filter(a => mode === 'all' || a.favorite);
+  visible = source==='apple'?all.filter(a => mode === 'all' || a.favorite):all.slice();
   playingCard=currentAlbum();
   if(playingCard && !visible.some(a=>a.id===playingCard.id)) visible.unshift(playingCard);
   if(searchSelection && !visible.some(a=>a.id===searchSelection))searchSelection=null;
@@ -282,6 +294,10 @@ lookup.addEventListener('focusout',()=>queueMicrotask(()=>{if(!lookup.contains(d
 document.addEventListener('pointerdown',e=>{if(!lookup.contains(e.target))hideSearch();});
 function openSelected(selected=visible[index]) {
   if(!selected)return;
+  if(source!=='apple'){
+    if(selected.id!==currentAlbum()?.id){notice(ui.localReplay);return;}
+    if(media.playing || !media.canPlay)return;
+  }
   browsing();
   startPlay(selected);
 }
@@ -289,12 +305,12 @@ function draw() {
   const length=visible.length, center=Math.round(cursor), displayed=length?wrap(center,length):0, a=visible[displayed];
   if(!layoutDirty && center===previousCenter){paintCovers();return;}
   layoutDirty=false;previousCenter=center;
-  $('filter').firstChild.textContent = mode === 'favorites' ? ui.favorites : ui.all;
+  $('filter').firstChild.textContent = source!=='apple' ? sourcePicker.selectedOptions[0].text : mode === 'favorites' ? ui.favorites : ui.all;
   $('switch').textContent = mode === 'favorites' ? ui.showAll : ui.showFavorites;
   $('dock').textContent = docked ? ui.undock : ui.dock;
   $('counter').textContent = length ? String(displayed + 1).padStart(2, '0') + ' / ' + length : '0 / 0';
-  $('album').textContent = a ? a.title : (mode === 'favorites' ? ui.noFavorites : ui.empty);
-  $('artist').textContent = a ? a.artist || ui.unknown : (mode === 'favorites' ? ui.browseAll : ui.add);
+  $('album').textContent = a ? a.title : source!=='apple'?ui.waitingPlayer:(mode === 'favorites' ? ui.noFavorites : ui.empty);
+  $('artist').textContent = a ? a.artist || ui.unknown : source!=='apple'?(media.hint || ui.localHint):(mode === 'favorites' ? ui.browseAll : ui.add);
   $('album').title = $('album').textContent; $('artist').title = $('artist').textContent;
   const keep = new Set();posed=[];
   const left=Math.min(radius,Math.floor((length-1)/2)),right=Math.min(radius,length-1-left);
@@ -317,14 +333,14 @@ function draw() {
       };
       nodes.set(item.id,card); covers.append(card);
     }
-    const source=item.cover ? 'https://art.local/'+encodeURIComponent(item.cover) : (item.id===playingCard?.id && media.artwork) || '';
-    if (source !== (card.dataset.cover || '')) {
+    const artwork=item.cover ? 'https://art.local/'+encodeURIComponent(item.cover) : item.localArtwork || (item.id===playingCard?.id && media.artwork) || '';
+    if (artwork !== (card.dataset.cover || '')) {
       const old = card.querySelector('img'); if (old) old.remove();
-      card.dataset.cover = source;
-      if (source) {
+      card.dataset.cover = artwork;
+      if (artwork) {
         const img = new Image(); img.alt = ''; img.draggable = false;img.decoding='async';
         img.style.position = 'relative'; img.onerror = () => img.remove();
-        img.src = source; card.append(img);
+        img.src = artwork; card.append(img);
       }
     }
     posed.push({card,position:center+offset});
@@ -414,6 +430,7 @@ stage.addEventListener('pointermove',e=>{
   }
   if(!suppressClick){stage.setPointerCapture(e.pointerId);suppressClick=true;}
   if(direction==='lyrics'){
+    if(source!=='apple')return;
     if(!pulledCard)return;
     pulledCard.classList.add('pulling');
     pulledCard.style.setProperty('--pull',reducedMotion.matches?'0px':Math.sign(dy)*Math.min(50,Math.abs(dy)*.52)+'px');
@@ -433,7 +450,7 @@ function endDrag(e){
   if(pulledCard){
     pulledCard.classList.remove('pulling');pulledCard.style.removeProperty('--pull');
     const releasedPull=e.clientY-startY;
-    if(pulled && e.type==='pointerup' && Math.abs(releasedPull)>=42){
+    if(source==='apple' && pulled && e.type==='pointerup' && Math.abs(releasedPull)>=42){
       const dest=visible.findIndex(a=>a.id===pulledCard.dataset.id);
       if(dest>=0){
         const wasSide=dest!==wrap(Math.round(dragOrigin),visible.length);
@@ -460,7 +477,7 @@ $('grip').addEventListener('pointerdown',e=>{
 $('grip').onpointermove=e=>{if($('grip').hasPointerCapture(e.pointerId))send('drag');};
 $('grip').onlostpointercapture=()=>send(reducedMotion.matches?'dragEnd:instant':'dragEnd');
 document.addEventListener('keydown',e=>{
-  if(e.target.closest('#lookup') || e.isComposing)return;
+  if(e.target.closest('#lookup,select') || e.isComposing)return;
   if(e.key==='ArrowLeft' || e.key==='ArrowRight'){
     if (!e.repeat) $(e.key==='ArrowLeft'?'prev':'next').click();
   }
@@ -473,7 +490,14 @@ document.addEventListener('keydown',e=>{
 });
 window.chrome.webview.addEventListener('message',e=>{
   const x=e.data;
-  if(x.type==='library'){
+  if(x.type==='source'){
+    source=x.source;sourcePicker.value=source;
+    document.body.classList.toggle('local-source',source!=='apple');
+    $('filter').disabled=source!=='apple';
+    endPending();hideSearch();searchSelection=null;all=recentShelves.get(source)||[];media={};transportBusy=false;
+    searchIndex=all.map(album=>({album,title:searchable(album.title),artist:searchable(album.artist)}));
+    updateList(false);status();
+  }else if(x.type==='library'){
     const first=!all.length;all=x.albums;
     searchIndex=all.map(album=>({album,title:searchable(album.title),artist:searchable(album.artist)}));
     if(lookup.classList.contains('open'))renderResults();
@@ -483,6 +507,15 @@ window.chrome.webview.addEventListener('message',e=>{
     if(!all.length){$('album').textContent=ui.libraryError;$('artist').textContent=x.message;}
     notice(x.message);
   }else if(x.type==='media'){const first=!media.title,previous=media;media=x.state;
+    if(source!=='apple'){
+      const item=currentAlbum();
+      if(item){
+        const existing=all.find(a=>a.id===item.id);
+        if(!existing){all=[item,...all].slice(0,16);recentShelves.set(source,all);}
+        if(media.artwork)(existing || item).localArtwork=media.artwork;
+        if(!existing){searchIndex=all.map(album=>({album,title:searchable(album.title),artist:searchable(album.artist)}));if(lookup.classList.contains('open'))renderResults();}
+      }
+    }
     if(media.playing || !media.available)driveSound.stopPause();
     if(driveSoundEnabled && !pendingPlay && previous.playing && media.paused && media.title===previous.title)driveSound.pause();
     if(pendingPlay && previous.available && !media.available)endPending(ui.playTimeout);

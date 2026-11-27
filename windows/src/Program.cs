@@ -21,6 +21,15 @@ internal sealed class Shelf : Form
     readonly string baseDir=AppDomain.CurrentDomain.BaseDirectory;
     readonly string profile=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),Edition.Profile);
     readonly bool verify;
+    string source;
+    int sourceRevision;
+    internal static bool ValidSource(string value){return value=="apple" || value=="spotify" || value=="qq" || value=="kugou";}
+    internal static string SavedSource(){
+        var file=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),Edition.Profile,"source.txt");
+        try{if(File.Exists(file)){var value=File.ReadAllText(file).Trim();if(ValidSource(value))return value;}}
+        catch(IOException){}catch(UnauthorizedAccessException){}
+        return "apple";
+    }
     List<Album> albums=new List<Album>();
     IntPtr desktopParent=IntPtr.Zero;
     bool preferDock=true,reading,polling,ready,dragging;
@@ -51,6 +60,7 @@ internal sealed class Shelf : Form
     public Shelf(bool verifyUI)
     {
         verify=verifyUI;
+        source=verify?"apple":SavedSource();
         Text="Self Coverflow · Apple Music"; FormBorderStyle=FormBorderStyle.None;
         AutoScaleMode=AutoScaleMode.None;
         using(var g=Graphics.FromHwnd(IntPtr.Zero)) scale=g.DpiX/96.0;
@@ -204,6 +214,7 @@ internal sealed class Shelf : Form
                 SetDisplayMode();
                 Post(new {type="size",mode=sizeMode});
                 if(!verify)Playback.Changed=QueueMediaUpdate;
+                Post(new {type="source",source});
                 await Reload(true); await PollMedia();
                 if(verify) { await VerifyUI(); return; }
                 timer.Tick+=async delegate { if(!dragging) { await Reload(false); await PollMedia(); } }; timer.Start();
@@ -228,16 +239,18 @@ internal sealed class Shelf : Form
     }
     async Task Reload(bool force)
     {
-        if(reading) return;
+        if(reading || source!="apple") return;
         reading=true;
+        int revision=sourceRevision;
         try {
             long db=File.GetLastWriteTimeUtc(Library.Database).Ticks, art=Directory.GetLastWriteTimeUtc(Library.Covers).Ticks;
             if(!force && db==dbStamp && art==artStamp) return;
             var next=await Task.Run(()=>Library.Read());
+            if(revision!=sourceRevision)return;
             albums=next; dbStamp=db; artStamp=art;
             Post(new {type="library",albums});
         } catch(Exception ex) {
-            if(force || albums.Count>0) Post(new {type="libraryError",message=File.Exists(Library.Database)?ex.Message:Edition.Text("请先在本机 Apple Music 中打开并同步资料库。","Open Apple Music on this PC and sync your library.")});
+            if(revision==sourceRevision && (force || albums.Count>0)) Post(new {type="libraryError",message=File.Exists(Library.Database)?ex.Message:Edition.Text("请先在本机 Apple Music 中打开并同步资料库。","Open Apple Music on this PC and sync your library.")});
         } finally {reading=false;}
     }
     int mediaQueued;
@@ -251,9 +264,11 @@ internal sealed class Shelf : Form
     async Task PollMedia(bool confirm=false)
     {
         if(polling) return; polling=true;
+        int revision=sourceRevision;
         try {
             MediaState state;
-            try {state=await Playback.State(albums);} catch {state=new MediaState();}
+            try {state=source=="apple"?await Playback.State(albums):await Playback.LocalState(source);} catch {state=new MediaState();}
+            if(revision!=sourceRevision)return;
             if(albumQueueId!=state.albumId)albumQueueId=null;
             songTitle=state.title; if(lyrics!=null)lyrics.SetSong(songTitle);
             var current=json.Serialize(state);
@@ -344,6 +359,37 @@ internal sealed class Shelf : Form
 
     async Task Command(string cmd)
     {
+        if(cmd.StartsWith("source:",StringComparison.Ordinal)){
+            var value=cmd.Substring(7);
+            if(!ValidSource(value) || value==source)return;
+            request++;sourceRevision++;source=value;
+            if(!verify)File.WriteAllText(Path.Combine(profile,"source.txt"),value);
+            if(lyrics!=null)lyrics.Close();
+            albums=new List<Album>();albumQueueId=null;dbStamp=artStamp=-1;lastMedia="";
+            Post(new {type="source",source});
+            await Reload(true);await PollMedia();
+            return;
+        }
+        if(source!="apple"){
+            if(cmd.StartsWith("lyrics") || cmd.StartsWith("open:"))return;
+            bool resume=cmd.StartsWith("resume:",StringComparison.Ordinal);
+            if(cmd=="previousTrack" || cmd=="nextTrack" || cmd=="toggle" || resume || cmd=="repeatOne" || cmd=="repeatAlbum" || cmd=="repeatOff"){
+                int revision=sourceRevision;
+                bool ok=false;
+                try{ok=await Playback.ControlLocal(source,resume?"resume":cmd=="toggle"?"pause":cmd);}
+                catch(Exception ex){Debug.WriteLine(ex);}
+                if(revision==sourceRevision){
+                    await PollMedia(true);
+                    if(revision==sourceRevision){
+                        string message=ok?null:Edition.Text("播放器未接受操作。","The player did not accept the command.");
+                        Post(new {type="albumCommandDone",message});
+                        int localSerial;
+                        if(resume && !ok && int.TryParse(cmd.Substring(7),out localSerial))Post(new {type="playFailed",serial=localSerial,message});
+                    }
+                }
+                return;
+            }
+        }
         if(cmd=="previousTrack" || cmd=="nextTrack" || cmd=="repeatOne" || cmd=="repeatAlbum" || cmd=="repeatOff"){
             if(verify){Post(new {type="albumCommandDone"});return;}
             int albumToken=++request;
@@ -591,8 +637,8 @@ internal static class Program
         bool first;
         using(var m=new Mutex(true,verify?"Local\\CoverShelfUiCheck"+Edition.Suffix:AppLaunch.WidgetMutex,out first)){
             if(!first)return;
-            if(!verify && !args.Contains("--from-music")) try { AppLaunch.OpenMusic(); }
-            catch(Exception ex) { MessageBox.Show(Edition.Text("本机 Apple Music 未能启动。\n","Could not start Apple Music.\n")+ex.Message,"Self Coverflow",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
+            if(!verify && Shelf.SavedSource()=="apple" && !args.Contains("--from-music")) try { AppLaunch.OpenMusic(); }
+            catch(Exception ex) { Debug.WriteLine(ex); }
             Application.Run(new Shelf(verify));
         }
     }

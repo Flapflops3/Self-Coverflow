@@ -18,8 +18,8 @@ def page(file, heading, steps):
 page("welcome.html", "Self Coverflow", [
     ("Your albums, on your desktop.", "This installer places the English edition in Applications. It runs on Apple silicon and Intel Macs with macOS 13 or later.") if en else
     ("把唱片放在桌面上", "向导将把简体中文版安装到「应用程序」。支持 macOS 13 或更新版本的 Apple 芯片和 Intel Mac。"),
-    ("Before you begin", "Open Music, sign in and confirm that Library → Albums contains your albums.") if en else
-    ("安装前", "打开「音乐」并登录，在「资料库 → 专辑」确认可以看到自己的唱片。"),
+    ("Before you begin", "Play a song in your desktop music player. In Self Coverflow, choose it under More → Music source.") if en else
+    ("安装前", "在桌面音乐软件中播放歌曲，然后在唱片架的「更多 → 音乐来源」中选择该软件。"),
     ("Continue to install", "Your Music library stays on this Mac. The first launch asks permission to control Music.") if en else
     ("继续安装", "唱片架在本机读取资料库。首次启动时，系统会询问是否允许控制「音乐」。")
 ])
@@ -42,7 +42,7 @@ ET.SubElement(ET.SubElement(dist,"allowed-os-versions"),"os-version",{"min":"13.
 ET.SubElement(ET.SubElement(dist,"choices-outline"),"line",{"choice":"app"})
 choice=ET.SubElement(dist,"choice",{"id":"app","visible":"false"})
 ET.SubElement(choice,"pkg-ref",{"id":identifier})
-ET.SubElement(dist,"pkg-ref",{"id":identifier,"version":"1.0.0.5"}).text="app.pkg"
+ET.SubElement(dist,"pkg-ref",{"id":identifier,"version":"1.0.0.6"}).text="app.pkg"
 ET.ElementTree(dist).write(folder/"distribution.xml",encoding="utf-8",xml_declaration=True)
 payload=folder/"payload"
 metadata=folder/"components.plist"
@@ -50,5 +50,5 @@ subprocess.run(["pkgbuild","--analyze","--root",str(payload),str(metadata)],chec
 components=plistlib.loads(metadata.read_bytes())
 for component in components: component["BundleIsRelocatable"]=False
 metadata.write_bytes(plistlib.dumps(components))
-subprocess.run(["pkgbuild","--root",str(payload),"--component-plist",str(metadata),"--identifier",identifier,"--version","1.0.0.5","--install-location","/Applications",str(folder/"app.pkg")],check=True)
+subprocess.run(["pkgbuild","--root",str(payload),"--component-plist",str(metadata),"--identifier",identifier,"--version","1.0.0.6","--install-location","/Applications",str(folder/"app.pkg")],check=True)
 

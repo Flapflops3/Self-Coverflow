@@ -1,4 +1,11 @@
 const ui = Object.freeze({
+  "localReplay": "请在音乐软件中选择这张专辑播放。",
+  "queueRepeat": "队列循环 · 切换为单曲循环",
+  "queueOff": "不循环 · 开启队列循环",
+  "localHint": "在所选播放器中播放一首歌",
+  "waitingPlayer": "等待播放器",
+  "localPause": "暂停",
+  "localResume": "继续播放",
   "previousTrack": "上一首",
   "nextTrack": "下一首",
   "repeatAlbum": "专辑循环 · 切换为单曲循环",

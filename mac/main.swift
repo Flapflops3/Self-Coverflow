@@ -18,6 +18,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     var ready=false,reading=false,polling=false,attachedLyrics=true
     var pinned=false,docked=false,mode="classic",revision=0
     var lastTrack="",lyricsTrack="",lastState=Data(),lastRead=Date.distantPast
+    var source="apple",sourceRevision=0
     var albumByTrack=[String:String](), tracksByAlbum=[String:[String]]()
     var origin=NSPoint.zero,anchor=NSPoint.zero
     var idle:DispatchWorkItem?
@@ -37,6 +38,7 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         window.delegate=self
         window.center()
         if !smoke {
+            if let saved=defaults.string(forKey:"source"),LocalPlayer.bundles[saved] != nil {source=saved}
             _=window.setFrameUsingName("CoverShelf")
             if !NSScreen.screens.contains(where:{$0.visibleFrame.intersects(window.frame)}) {window.center()}
             pinned=defaults.bool(forKey:"pin");docked=defaults.bool(forKey:"desktop")
@@ -54,9 +56,11 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     }
     func webView(_ webView:WKWebView,didFinish navigation:WKNavigation!) {
         ready=true;post(["type":"size","mode":mode]);announceLevel()
+        post(["type":"source","source":source])
         if smoke {smokeTest();return}
         func connect(){self.reload();self.poll()}
-        if let url=NSWorkspace.shared.urlForApplication(withBundleIdentifier:"com.apple.Music") {
+        if source != "apple" {poll()}
+        else if let url=NSWorkspace.shared.urlForApplication(withBundleIdentifier:"com.apple.Music") {
             let options=NSWorkspace.OpenConfiguration();options.activates=false
             NSWorkspace.shared.openApplication(at:url,configuration:options){_,error in
                 DispatchQueue.main.async {if let error {self.notice(error.localizedDescription)} else {connect()}}
@@ -73,7 +77,8 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     }
     func notice(_ text:String){post(["type":"notice","message":text])}
     func reload(){
-        guard !reading else{return};reading=true;lastRead=Date()
+        guard source=="apple",!reading else{return};reading=true;lastRead=Date()
+        let generation=sourceRevision
         work.async {
             do {
                 let data=try Music.script(["library"])
@@ -87,16 +92,31 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
                     row.removeValue(forKey:"order");row["cover"]=id;albums.append(row)
                 }
                 DispatchQueue.main.async {
-                    self.reading=false;self.albumByTrack=map;self.tracksByAlbum=tracksByAlbum;self.resources.allowed=Set(map.values)
+                    self.reading=false;guard self.sourceRevision==generation else{return}
+                    self.albumByTrack=map;self.tracksByAlbum=tracksByAlbum;self.resources.allowed=Set(map.values)
                     self.post(["type":"library","albums":albums]);self.lastState=Data();self.poll()
                 }
             } catch {DispatchQueue.main.async{
-                self.reading=false;self.post(["type":"libraryError","message":self.tr("请在「系统设置 → 隐私与安全性 → 自动化」允许控制音乐，再刷新资料库。","Allow Music control in System Settings → Privacy & Security → Automation, then refresh the library.")+" "+error.localizedDescription])
+                self.reading=false;guard self.sourceRevision==generation else{return}
+                self.post(["type":"libraryError","message":self.tr("请在「系统设置 → 隐私与安全性 → 自动化」允许控制音乐，再刷新资料库。","Allow Music control in System Settings → Privacy & Security → Automation, then refresh the library.")+" "+error.localizedDescription])
             }}
         }
     }
     func poll(){
         guard !polling,!smoke else{return};polling=true
+        let selected=source,generation=sourceRevision
+        if selected != "apple" {
+            work.async {
+                let state=(try? LocalPlayer.state(selected)) ?? ["available":false]
+                DispatchQueue.main.async {
+                    self.polling=false;guard self.sourceRevision==generation else{return}
+                    let serial=(try? JSONSerialization.data(withJSONObject:state,options:.sortedKeys)) ?? Data()
+                    if self.lastState != serial {self.lastState=serial;self.post(["type":"media","state":state])}
+                    else {self.post(["type":"playbackCheck","playing":state["playing"] ?? false])}
+                }
+            }
+            return
+        }
         let wantsLyrics=lyrics.panel.isVisible
         work.async {
             do {
@@ -106,7 +126,8 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
                 var position:Double?
                 if wantsLyrics,!id.isEmpty, let raw=try? Music.script(["position"]) {position=Double(String(decoding:raw,as:UTF8.self).trimmingCharacters(in:.whitespacesAndNewlines))}
                 DispatchQueue.main.async {
-                    self.polling=false;self.lastTrack=id;state["albumId"]=self.albumByTrack[id]
+                    self.polling=false;guard self.sourceRevision==generation else{return}
+                    self.lastTrack=id;state["albumId"]=self.albumByTrack[id]
                     let tracks=self.tracksByAlbum[self.albumByTrack[id] ?? ""] ?? []
                     state["canRepeat"] = !tracks.isEmpty;state["canStep"] = tracks.count>1
                     let serial=(try? JSONSerialization.data(withJSONObject:state,options:.sortedKeys)) ?? Data()
@@ -136,6 +157,33 @@ final class Shelf: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     func userContentController(_ controller:WKUserContentController,didReceive message:WKScriptMessage) {
         guard message.frameInfo.isMainFrame,message.frameInfo.request.url?.host=="ui",let cmd=message.body as? String else{return}
         let f=cmd.components(separatedBy:":")
+        if f[0]=="source" {
+            guard f.count==2, f[1] != source, f[1]=="apple" || LocalPlayer.bundles[f[1]] != nil else{return}
+            source=f[1];sourceRevision+=1;defaults.set(source,forKey:"source")
+            lyrics.panel.orderOut(nil);lyricsTrack="";lastTrack="";lastState=Data();lastRead = .distantPast
+            albumByTrack=[:];tracksByAlbum=[:];resources.allowed=[]
+            post(["type":"source","source":source]);reload();poll();return
+        }
+        if source != "apple" {
+            let command=f[0]
+            if ["lyrics","open"].contains(command){return}
+            if ["resume","toggle","previousTrack","nextTrack","repeatOne","repeatAlbum","repeatOff"].contains(command){
+                let selected=source,generation=sourceRevision
+                work.async {
+                    var reply:[String:Any]=["type":"albumCommandDone"]
+                    do {try LocalPlayer.control(selected,command)}
+                    catch {
+                        reply["message"]=self.tr("播放器未接受操作。","The player did not accept the command.")
+                        if command=="resume",f.count>1 {reply["type"]="playFailed";reply["serial"]=Int(f[1])}
+                    }
+                    DispatchQueue.main.async {
+                        guard self.sourceRevision==generation else{return}
+                        self.post(reply);self.poll()
+                    }
+                }
+                return
+            }
+        }
         switch f[0] {
         case "browse":
             guard f.count>1,let n=Int(f[1]) else{return}

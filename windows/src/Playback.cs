@@ -10,8 +10,9 @@ internal sealed class MediaState
 {
     public bool available, playing, paused, canPlay, canPause;
     public string title="", album="", artist="";
-    public string albumId, artwork, repeatMode;
+    public string albumId, artwork, repeatMode, albumArtist;
     public bool canStep, canRepeat;
+    public bool? canNext,canPrevious;
 }
 
 internal static class Playback
@@ -62,16 +63,64 @@ internal static class Playback
             }
         }
     }
-    static async Task<GlobalSystemMediaTransportControlsSession> Session()
+    internal static bool MatchesSource(string id,string source)
+    {
+        string name=(id??"").ToLowerInvariant();
+        switch(source){
+            case "spotify":return name.Contains("spotify");
+            case "qq":return name.Contains("qqmusic") || name.Contains("qq音乐") || name.Contains("qq音樂");
+            case "kugou":return name.Contains("kugou") || name.Contains("酷狗") || name.EndsWith("kgmusic.exe");
+            case "apple":return name.StartsWith("appleinc.applemusicwin_");
+            default:return false;
+        }
+    }
+    static async Task<GlobalSystemMediaTransportControlsSession> Session(string source="apple")
     {
         if (manager==null) manager=await AsTask<GlobalSystemMediaTransportControlsSessionManager>(GlobalSystemMediaTransportControlsSessionManager.RequestAsync());
-        var session=manager.GetSessions().FirstOrDefault(s=>s.SourceAppUserModelId.StartsWith("AppleInc.AppleMusicWin_",StringComparison.OrdinalIgnoreCase));
+        var sessions=manager.GetSessions().Where(s=>MatchesSource(s.SourceAppUserModelId,source)).ToList();
+        var session=sessions.Count<=1?sessions.FirstOrDefault():sessions.FirstOrDefault(s=>s.GetPlaybackInfo().PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)??sessions[0];
         if(Changed!=null && !Object.ReferenceEquals(session,observed)){
             if(observed!=null){observed.MediaPropertiesChanged-=MediaChanged;observed.PlaybackInfoChanged-=InfoChanged;}
             observed=session;
             if(session!=null){session.MediaPropertiesChanged+=MediaChanged;session.PlaybackInfoChanged+=InfoChanged;}
         }
         return session;
+    }
+    internal static async Task<MediaState> LocalState(string source)
+    {
+        var session=await Session(source);
+        if(session==null)return new MediaState();
+        var p=await AsTask<GlobalSystemMediaTransportControlsSessionMediaProperties>(session.TryGetMediaPropertiesAsync());
+        var info=session.GetPlaybackInfo();
+        var controls=info.Controls;
+        return new MediaState {
+            available=true,playing=info.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
+            paused=info.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused,
+            title=p.Title,album=p.AlbumTitle,albumArtist=p.AlbumArtist,artist=p.Artist,artwork=await ReadArtwork(p.Thumbnail),
+            canPlay=controls.IsPlayEnabled,canPause=controls.IsPauseEnabled,canNext=controls.IsNextEnabled,
+            canPrevious=controls.IsPreviousEnabled,canRepeat=controls.IsRepeatEnabled && info.AutoRepeatMode.HasValue,
+            repeatMode=info.AutoRepeatMode==Windows.Media.MediaPlaybackAutoRepeatMode.Track?"one":
+                info.AutoRepeatMode==Windows.Media.MediaPlaybackAutoRepeatMode.List?"album":"off"
+        };
+    }
+    internal static async Task<bool> ControlLocal(string source,string command)
+    {
+        var session=await Session(source);
+        if(session==null)return false;
+        var info=session.GetPlaybackInfo();
+        var c=info.Controls;
+        switch(command){
+            case "nextTrack":return c.IsNextEnabled && await AsTask<bool>(session.TrySkipNextAsync());
+            case "previousTrack":return c.IsPreviousEnabled && await AsTask<bool>(session.TrySkipPreviousAsync());
+            case "pause":return c.IsPauseEnabled && await AsTask<bool>(session.TryPauseAsync());
+            case "resume":return info.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing ||
+                (c.IsPlayEnabled && await AsTask<bool>(session.TryPlayAsync()));
+            case "repeatAlbum":case "repeatOne":case "repeatOff":
+                var mode=command=="repeatAlbum"?Windows.Media.MediaPlaybackAutoRepeatMode.List:
+                    command=="repeatOne"?Windows.Media.MediaPlaybackAutoRepeatMode.Track:Windows.Media.MediaPlaybackAutoRepeatMode.None;
+                return c.IsRepeatEnabled && await AsTask<bool>(session.TryChangeAutoRepeatModeAsync(mode));
+            default:return false;
+        }
     }
     internal static async Task<MediaState> State(List<Album> library=null,bool includeArtwork=true)
     {
